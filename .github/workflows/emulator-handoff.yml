@@ -1,0 +1,35 @@
+name: Emulator handoff
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  handoff:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download verified APK artifact
+        uses: actions/download-artifact@v5
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 37835815981
+          artifact-ids: 11576130538
+          path: handoff
+
+      - name: Publish temporary release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f handoff/app-release.apk
+          TAG="emulator-handoff-572a122"
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" handoff/app-release.apk \
+            --target 572a122a9bfdf5504951363276aaca14452dd2f8 \
+            --title "Emulator handoff" \
+            --notes "Temporary verified APK handoff." \
+            --prerelease
