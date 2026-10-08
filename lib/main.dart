@@ -907,8 +907,8 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
     return pantry.where((item) {
       final end = expiry[SmartRecipeEngine.normalize(item)];
       return end != null &&
-          end! >= now &&
-          end! - now <= const Duration(days: 3).inMilliseconds;
+          end >= now &&
+          end - now <= const Duration(days: 3).inMilliseconds;
     }).toList();
   }
 
