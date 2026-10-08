@@ -31,6 +31,18 @@ jobs:
           mkdir -p android/app/src/main/res/drawable
           cp assets/cozy_icon.xml android/app/src/main/res/drawable/cozy_icon.xml
           sed -i 's#android:icon="@mipmap/ic_launcher"#android:icon="@drawable/cozy_icon"#' android/app/src/main/AndroidManifest.xml
+      - name: Enforce arm64-only Android build
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/build.gradle.kts')
+          text = path.read_text()
+          needle = '    defaultConfig {\n'
+          if needle not in text:
+              raise SystemExit('defaultConfig block not found')
+          text = text.replace(needle, needle + '        ndk {\n            abiFilters.add("arm64-v8a")\n        }\n', 1)
+          path.write_text(text)
+          PY
       - name: Dependencies
         run: flutter pub get
       - name: Analyze
