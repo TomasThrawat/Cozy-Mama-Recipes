@@ -12,7 +12,7 @@ Map<String, dynamic> _recipeRow(
   'title': title,
   'category': category,
   'time': time,
-  'description': '${title} بطابع عربي بيتي بخطوات واضحة ومكونات متاحة.',
+  'description': '$title بطابع عربي بيتي بخطوات واضحة ومكونات متاحة.',
   'ingredients': ingredients,
   'steps': steps,
   'favorite': favorite,
