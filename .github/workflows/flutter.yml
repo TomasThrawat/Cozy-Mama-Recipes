@@ -66,6 +66,23 @@ jobs:
             echo "Found a non-arm64-v8a native library"
             exit 1
           fi
+      - name: Export APK for emulator validation
+        if: github.ref_name == 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPORT_BRANCH: emulator-apk-572a122
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout --detach
+          git switch --orphan "$EXPORT_BRANCH"
+          git rm -rf . >/dev/null 2>&1 || true
+          mkdir -p emulator
+          cp build/app/outputs/flutter-apk/app-release.apk emulator/app-release.apk
+          git add emulator/app-release.apk
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "chore: temporary emulator APK"
+          git push origin HEAD:"refs/heads/$EXPORT_BRANCH" --force
       - name: Upload APK
         uses: actions/upload-artifact@v6
         with:
