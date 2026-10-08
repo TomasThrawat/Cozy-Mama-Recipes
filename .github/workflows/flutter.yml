@@ -19,6 +19,11 @@ jobs:
           cache: true
       - name: Create Android files
         run: flutter create --platforms=android --project-name cozy_mama_recipes .
+      - name: Apply cozy launcher icon
+        run: |
+          mkdir -p android/app/src/main/res/drawable
+          cp assets/cozy_icon.xml android/app/src/main/res/drawable/cozy_icon.xml
+          sed -i 's#android:icon="@mipmap/ic_launcher"#android:icon="@drawable/cozy_icon"#' android/app/src/main/AndroidManifest.xml
       - name: Dependencies
         run: flutter pub get
       - name: Analyze
