@@ -944,7 +944,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
     final shown = scaled == scaled.roundToDouble()
         ? scaled.toInt().toString()
         : scaled.toStringAsFixed(1);
-    return '\${shown} \${match.group(2)!}';
+    return '${shown} ${match.group(2)!}';
   }
 
   Future<void> _recipeDetails(Recipe recipe) async {
@@ -1092,7 +1092,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
               const SizedBox(height: 12),
               if (seconds > 0)
                 Text(
-                  '\${seconds ~/ 60}:\${(seconds % 60).toString().padLeft(2, '0')}',
+                  '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}',
                   style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
                 ),
               Wrap(
@@ -1202,8 +1202,8 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
             ]),
             const SizedBox(height: 7),
             Text(item.reason),
-            if (item.matched.isNotEmpty) Text('موجود: \${item.matched.take(5).join('، ')}'),
-            if (item.missing.isNotEmpty) Text('ناقص: \${item.missing.take(5).join('، ')}'),
+            if (item.matched.isNotEmpty) Text('موجود: ${item.matched.take(5).join('، ')}'),
+            if (item.missing.isNotEmpty) Text('ناقص: ${item.missing.take(5).join('، ')}'),
             Wrap(spacing: 4, runSpacing: 4, children: [
               Chip(label: Text(item.recipe.country)),
               Chip(label: Text(item.recipe.category)),
@@ -1247,7 +1247,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
           ]),
           Text('\${pantry.length} مكوّن محفوظ Offline'),
           if (expiring.isNotEmpty)
-            Text('قريب من الانتهاء: \${expiring.join('، ')}', style: const TextStyle(fontWeight: FontWeight.w800)),
+            Text('قريب من الانتهاء: ${expiring.join('، ')}', style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           Wrap(
             spacing: 5,
@@ -1374,7 +1374,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
           Padding(
             padding: const EdgeInsets.only(top: 7),
             child: Text(
-              'فهمت: \${interpreted.join('، ')}',
+              'فهمت: ${interpreted.join('، ')}',
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
