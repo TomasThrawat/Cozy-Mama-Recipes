@@ -41,9 +41,15 @@ void main() {
     await tester.tap(recipeTitle.first);
     await tester.pumpAndSettle();
     expect(find.text('المكونات'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('الطريقة'), 300, scrollable: find.byType(Scrollable).last);
     expect(find.text('الطريقة'), findsOneWidget);
 
-    await tester.tapAt(const Offset(20, 20));
+    await tester.tap(find.byIcon(Icons.close).first, warnIfMissed: false);
     await tester.pumpAndSettle();
+
+    final favorite = find.byIcon(Icons.favorite_border_rounded).first;
+    await tester.tap(favorite);
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.favorite_rounded), findsWidgets);
   });
 }
