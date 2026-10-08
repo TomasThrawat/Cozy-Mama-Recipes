@@ -1053,7 +1053,11 @@ String _timeFor(String title) {
 List<String> _ingredientsFor(String title, String country) {
   final result = <String>[];
   void add(String value) { if (!result.contains(value)) result.add(value); }
-  void addMany(Iterable<String> items) { for (final item in items) add(item); }
+  void addMany(Iterable<String> items) {
+    for (final item in items) {
+      add(item);
+    }
+  }
   if (_isSweet(title)) {
     addMany(['دقيق','سكر','زبدة']);
   } else if (title.contains('سلطة')) {
@@ -1114,7 +1118,7 @@ Map<String, dynamic> _expandedRecipe(String country, int index, String title) {
   final category = _categoryFor(title);
   final code = _countryCodes[country] ?? 'ar';
   return {
-    'id': 'ar-'+code+'-'+(index+1).toString().padLeft(3,'0'),
+    'id': 'ar-$code-${(index + 1).toString().padLeft(3, '0')}',
     'title': title, 'category': category, 'time': _timeFor(title), 'country': country,
     'description': '$title من مطبخ $country ضمن كتالوج عربي موسّع، بمكونات أساسية وخطوات واضحة.',
     'ingredients': _ingredientsFor(title, country), 'steps': _stepsFor(category), 'favorite': false,
