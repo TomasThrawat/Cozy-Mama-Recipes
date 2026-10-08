@@ -26,10 +26,6 @@ jobs:
           cache: true
       - name: Create Android files
         run: flutter create --platforms=android --project-name cozy_mama_recipes .
-      - name: Disable Gradle file watching
-        run: printf '
-org.gradle.vfs.watch=false
-' >> android/gradle.properties
       - name: Apply cozy launcher icon
         run: |
           mkdir -p android/app/src/main/res/drawable
