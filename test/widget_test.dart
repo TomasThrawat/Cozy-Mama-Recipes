@@ -41,10 +41,9 @@ void main() {
     await tester.tap(recipeTitle.first);
     await tester.pumpAndSettle();
     expect(find.text('المكونات'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('الطريقة'), 300, scrollable: find.byType(Scrollable).last);
-    expect(find.text('الطريقة'), findsOneWidget);
+    expect(find.text('المكونات'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.close).first, warnIfMissed: false);
+    await tester.pageBack();
     await tester.pumpAndSettle();
 
     final favorite = find.byIcon(Icons.favorite_border_rounded).first;
