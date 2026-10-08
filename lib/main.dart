@@ -23,6 +23,121 @@ class Recipe {
     steps:List<String>.from(j['steps'] ?? []), favorite:j['favorite'] ?? false);
 }
 
+
+class SmartSuggestion {
+  final Recipe recipe;
+  final List<String> matched;
+  final List<String> missing;
+  final int score;
+  final double coverage;
+
+  const SmartSuggestion({
+    required this.recipe,
+    required this.matched,
+    required this.missing,
+    required this.score,
+    required this.coverage,
+  });
+}
+
+class SmartRecipeEngine {
+  static const Map<String, String> _aliases = {
+    'egg': 'بيض', 'eggs': 'بيض', 'بيضة': 'بيض', 'بيضه': 'بيض',
+    'cheese': 'جبنة', 'cheese slices': 'جبنة', 'جبن': 'جبنة', 'جبنه': 'جبنة',
+    'milk': 'لبن', 'حليب': 'لبن',
+    'chicken': 'دجاج', 'فراخ': 'دجاج', 'فراخك': 'دجاج',
+    'potato': 'بطاطس', 'potatoes': 'بطاطس', 'بطاطا': 'بطاطس',
+    'tomato': 'طماطم', 'tomatoes': 'طماطم',
+    'onion': 'بصل', 'rice': 'أرز', 'رز': 'أرز',
+    'pasta': 'مكرونة', 'macaroni': 'مكرونة', 'مكرونه': 'مكرونة',
+    'garlic': 'ثوم', 'butter': 'زبدة', 'oil': 'زيت',
+    'carrot': 'جزر', 'carrots': 'جزر', 'peas': 'بازلاء',
+    'bread': 'عيش', 'خبز': 'عيش',
+    'black pepper': 'فلفل أسود', 'pepper': 'فلفل', 'salt': 'ملح',
+  };
+
+  static const Set<String> _staples = {'ملح', 'فلفل', 'فلفل أسود', 'زيت', 'ماء'};
+
+  static String normalize(String value) {
+    var x = value.toLowerCase().trim();
+    x = x
+        .replaceAll(RegExp(r'[ًٌٍَُِّْـ]'), '')
+        .replaceAll('أ', 'ا')
+        .replaceAll('إ', 'ا')
+        .replaceAll('آ', 'ا')
+        .replaceAll('ى', 'ي')
+        .replaceAll('ة', 'ه')
+        .replaceAll('ؤ', 'و')
+        .replaceAll('ئ', 'ي');
+    x = x.replaceAll(RegExp(r'\s+'), ' ');
+    return _aliases[x] ?? x;
+  }
+
+  static bool _matches(String pantryItem, String ingredient) {
+    final p = normalize(pantryItem);
+    final i = normalize(ingredient);
+    if (p == i) return true;
+    if (p.contains(i) || i.contains(p)) return true;
+    final pTokens = p.split(' ').toSet();
+    final iTokens = i.split(' ').toSet();
+    if (pTokens.intersection(iTokens).isNotEmpty && pTokens.length == 1) return true;
+    return false;
+  }
+
+  static List<SmartSuggestion> rank(List<String> pantry, List<Recipe> recipes) {
+    final results = <SmartSuggestion>[];
+    for (final recipe in recipes) {
+      final matched = <String>[];
+      final missing = <String>[];
+      for (final ingredient in recipe.ingredients) {
+        if (_staples.contains(normalize(ingredient))) continue;
+        if (pantry.any((item) => _matches(item, ingredient))) {
+          matched.add(ingredient);
+        } else {
+          missing.add(ingredient);
+        }
+      }
+      if (matched.isEmpty) continue;
+      final usefulCount = matched.length + missing.length;
+      final coverage = usefulCount == 0 ? 0.0 : matched.length / usefulCount;
+      final score = matched.length * 30 + (coverage * 25).round() - (missing.length * 2);
+      results.add(SmartSuggestion(
+        recipe: recipe,
+        matched: matched,
+        missing: missing,
+        score: score,
+        coverage: coverage,
+      ));
+    }
+    results.sort((a, b) {
+      final score = b.score.compareTo(a.score);
+      if (score != 0) return score;
+      final coverage = b.coverage.compareTo(a.coverage);
+      if (coverage != 0) return coverage;
+      return a.recipe.time.compareTo(b.recipe.time);
+    });
+    return results;
+  }
+}
+
+List<String> parseIngredients(String value) => value
+    .split(RegExp(r'[,،\n]+'))
+    .map((x) => x.trim())
+    .where((x) => x.isNotEmpty)
+    .fold<List<String>>([], (out, item) {
+      if (!out.any((x) => SmartRecipeEngine.normalize(x) == SmartRecipeEngine.normalize(item))) {
+        out.add(item);
+      }
+      return out;
+    });
+
+List<String> parseSteps(String value) => value
+    .split(RegExp(r'[\r\n]+'))
+    .map((x) => x.trim().replaceFirst(RegExp(r'^\d+[.)\-]\s*'), ''))
+    .where((x) => x.isNotEmpty)
+    .toList();
+
+
 void main() => runApp(const CozyMamaApp());
 
 class CozyMamaApp extends StatefulWidget {
@@ -34,11 +149,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   final navigatorKey = GlobalKey<NavigatorState>();
   int tab = 0;
   List<String> pantry = ['بطاطس','بيض','طماطم','بصل','أرز','دجاج','مكرونة','جبنة'];
-  List<Recipe> recipes = [
-    const Recipe(id:'1',title:'مكرونة بالصوص الكريمي',category:'غداء',time:'25 دقيقة',description:'وجبة دافئة وسريعة للأيام المزدحمة.',ingredients:['مكرونة','لبن','جبنة','زبدة','ثوم'],steps:['اسلقي المكرونة.','حضّري الصوص بالزبدة والثوم واللبن.','أضيفي الجبنة ثم المكرونة وقدميها دافئة.'],favorite:true),
-    const Recipe(id:'2',title:'صينية بطاطس بالدجاج',category:'غداء',time:'50 دقيقة',description:'صينية بيتية مشبعة ومناسبة للعيلة.',ingredients:['بطاطس','دجاج','بصل','طماطم','ثوم'],steps:['قطعي المكونات.','تبّلي الدجاج والخضار.','اخبزي الصينية حتى تنضج وتحمر.']),
-    const Recipe(id:'3',title:'أرز بالخضار',category:'سريع',time:'30 دقيقة',description:'اختيار بسيط لما يكون الوقت ضيق.',ingredients:['أرز','جزر','بازلاء','بصل'],steps:['شوّحي البصل والخضار.','أضيفي الأرز والماء.','اتركيه حتى ينضج.'])
-  ];
+  List<Recipe> recipes = starterRecipes();
 
   @override void initState() { super.initState(); load(); }
 
@@ -48,7 +159,17 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     final ing = p.getStringList('pantry');
     if (!mounted) return;
     setState(() {
-      if (raw != null) recipes = (jsonDecode(raw) as List).map((e) => Recipe.fromJson(e)).toList();
+      if (raw != null) {
+        final saved = (jsonDecode(raw) as List).map((e) => Recipe.fromJson(e)).toList();
+        final seeds = starterRecipes();
+        final seedIds = seeds.map((e) => e.id).toSet();
+        final savedById = {for (final r in saved) r.id: r};
+        recipes = seeds.map((seed) {
+          final old = savedById.remove(seed.id);
+          return old == null ? seed : seed.copyWith(favorite: old.favorite);
+        }).toList()
+          ..addAll(savedById.values.where((r) => !seedIds.contains(r.id)));
+      }
       if (ing != null) pantry = ing;
     });
   }
@@ -59,15 +180,8 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     await p.setStringList('pantry', pantry);
   }
 
-  List<Recipe> get suggestions {
-    final have = pantry.map((x) => x.toLowerCase()).toSet();
-    final scored = recipes.map((r) {
-      final score = r.ingredients.where((x) => have.contains(x.toLowerCase())).length;
-      return MapEntry(r, score);
-    }).where((x) => x.value > 0).toList();
-    scored.sort((a,b) => b.value.compareTo(a.value));
-    return scored.map((x) => x.key).toList();
-  }
+  List<Recipe> get suggestions =>
+      SmartRecipeEngine.rank(pantry, recipes).map((x) => x.recipe).toList();
 
   @override Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner:false, title:'مطبخي الدافي',
@@ -156,7 +270,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       ])),
       actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('إلغاء')),FilledButton(onPressed:(){
         if(title.text.trim().isEmpty)return;
-        final r=Recipe(id:DateTime.now().microsecondsSinceEpoch.toString(),title:title.text.trim(),category:'بيتي',time:time.text.trim().isEmpty?'غير محدد':time.text.trim(),description:'وصفة من مطبخك.',ingredients:ingredients.text.split(',').map((x)=>x.trim()).where((x)=>x.isNotEmpty).toList(),steps:steps.text.split('\\n').map((x)=>x.trim()).where((x)=>x.isNotEmpty).toList());
+        final r=Recipe(id:DateTime.now().microsecondsSinceEpoch.toString(),title:title.text.trim(),category:'بيتي',time:time.text.trim().isEmpty?'غير محدد':time.text.trim(),description:'وصفة من مطبخك.',ingredients:parseIngredients(ingredients.text),steps:parseSteps(steps.text));
         setState(()=>recipes.insert(0,r));save();Navigator.pop(dialogContext);
       },child:const Text('حفظ'))]
     )));
