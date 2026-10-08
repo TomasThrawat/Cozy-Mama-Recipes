@@ -9,7 +9,7 @@ void main() {
 
     expect(find.text('مطبخي الدافي'), findsOneWidget);
     expect(find.text('الرئيسية'), findsOneWidget);
-    expect(find.text('اقترحي لي'), findsOneWidget);
+    expect(find.text('وصفاتي'), findsOneWidget);
   });
 
   testWidgets('navigation and pantry controls respond', (tester) async {
@@ -36,19 +36,17 @@ void main() {
     await tester.pumpWidget(const CozyMamaApp());
     await tester.pumpAndSettle();
 
-    final recipeTitle = find.text('مكرونة بالصوص الكريمي');
-    expect(recipeTitle, findsWidgets);
-    await tester.tap(recipeTitle.first);
-    await tester.pumpAndSettle();
-    expect(find.text('المكونات'), findsOneWidget);
-    expect(find.text('المكونات'), findsOneWidget);
-
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-
     final favorite = find.byIcon(Icons.favorite_border_rounded).first;
     await tester.tap(favorite);
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.favorite_rounded), findsWidgets);
+
+    final recipeTitle = find.text('مكرونة بالصوص الكريمي');
+    expect(recipeTitle, findsWidgets);
+    await tester.tap(recipeTitle.first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('المكونات'), findsOneWidget);
+    expect(find.text('الطريقة'), findsOneWidget);
   });
 }
