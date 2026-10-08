@@ -76,7 +76,7 @@ class SmartRecipeEngine {
     'ليمون': 'ليمون', 'lemon': 'ليمون',
     'tomato sauce': 'طماطم', 'passata': 'طماطم', 'canned tomatoes': 'طماطم',
     'rice vermicelli': 'شعرية', 'vermicelli': 'شعرية', 'semolina': 'سميد',
-    'olive oil': 'زيت زيتون', 'yogurt': 'زبادي', 'coconut': 'جوز الهند',
+    'olive oil': 'زيت زيتون', 'coconut': 'جوز الهند',
   };
 
   static const Set<String> _staples = {'ملح', 'فلفل', 'زيت', 'ماء', 'سكر', 'خل'};
@@ -372,14 +372,16 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     return ListView.builder(
       padding: const EdgeInsets.all(18), itemCount: list.isEmpty ? 1 : list.length + 1,
       itemBuilder: (_, index) {
-        if (index == 0) return Container(
+        if (index == 0) {
+          return Container(
           padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFFE7F0E5), borderRadius: BorderRadius.circular(24)),
           child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Icon(Icons.auto_awesome_rounded, color: sage, size: 30), SizedBox(height: 8),
             Text('اقتراحات ذكية من مطبخك', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: brown)),
             SizedBox(height: 5), Text('الترتيب بيتعلم من المفضلة والوصفات اللي طبختيها، وبيوضح لك المتوفر والناقص.', style: TextStyle(color: brown, height: 1.4)),
           ]),
-        );
+          );
+        }
         if (list.isEmpty) return empty('لسه مفيش اقتراح مناسب. ضيفي مكونات أكتر أو احفظي وصفات جديدة.');
         return smartSuggestionCard(list[index - 1]);
       },
