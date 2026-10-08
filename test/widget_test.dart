@@ -8,8 +8,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('أهلاً يا ماما'), findsOneWidget);
-    expect(find.text('مكونات البيت'), findsOneWidget);
-    expect(find.text('اقتراحات من مطبخي'), findsNothing);
+    expect(find.text('ماذا نطبخ اليوم؟'), findsOneWidget);
     expect(find.text('وصفاتك'), findsOneWidget);
   });
 
@@ -48,7 +47,10 @@ void main() {
 
     await tester.tap(borderFinder.first);
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.favorite_border_rounded).evaluate().length, beforeBorderCount - 1);
+    expect(
+      find.byIcon(Icons.favorite_border_rounded).evaluate().length,
+      beforeBorderCount - 1,
+    );
 
     final recipeTitle = find.text(starterRecipes().first.title);
     expect(recipeTitle, findsOneWidget);
@@ -56,14 +58,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('المكونات'), findsOneWidget);
-    expect(find.text('الطريقة'), findsOneWidget);
 
-    final stepFinder = find.text(starterRecipes().first.steps.last);
+    final methodFinder = find.text('الطريقة');
     await tester.scrollUntilVisible(
-      stepFinder,
+      methodFinder,
       300,
       scrollable: find.byType(Scrollable).last,
     );
-    expect(stepFinder, findsOneWidget);
+    expect(methodFinder, findsOneWidget);
+
+    final lastStepFinder = find.text(starterRecipes().first.steps.last);
+    await tester.scrollUntilVisible(
+      lastStepFinder,
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(lastStepFinder, findsOneWidget);
   });
 }
