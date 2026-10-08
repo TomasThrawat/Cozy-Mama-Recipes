@@ -1,0 +1,35 @@
+name: Flutter APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Create Android files
+        run: flutter create --platforms=android --project-name cozy_mama_recipes .
+      - name: Dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test
+      - name: Build arm64 APK
+        run: flutter build apk --release --target-platform android-arm64
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cozy-mama-recipes-arm64
+          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          if-no-files-found: error
