@@ -54,9 +54,12 @@ void main() {
 
   test('Arabic catalog covers common food and beans are directly discoverable', () {
     final recipes = starterRecipes();
-    expect(recipes.length, greaterThanOrEqualTo(100));
+    expect(recipes.length, equals(1000));
+    expect(recipes.map((r) => r.id).toSet().length, equals(1000));
+    expect(recipes.map((r) => r.country).toSet().length, equals(23));
     final results = SmartRecipeEngine.rank(['فاصوليا'], recipes);
     expect(results.any((x) => x.recipe.title.contains('فاصوليا')), isTrue);
+    expect(results.length, greaterThan(5));
   });
 
   test('smart ranking can use cooking history', () {

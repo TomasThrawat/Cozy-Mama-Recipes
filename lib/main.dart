@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'recipe_seed_data.dart';
+import 'recipe_expansion.dart';
 
 const cream = Color(0xFFFFF8EE);
 const peach = Color(0xFFF3B39B);
@@ -11,16 +12,16 @@ const sage = Color(0xFF8BAA8B);
 const card = Color(0xFFFFFCF7);
 
 class Recipe {
-  final String id, title, category, time, description;
+  final String id, title, category, time, description, country;
   final List<String> ingredients, steps;
   final bool favorite;
-  const Recipe({required this.id, required this.title, required this.category, required this.time, required this.description, required this.ingredients, required this.steps, this.favorite = false});
-  Recipe copyWith({bool? favorite}) => Recipe(id:id,title:title,category:category,time:time,description:description,ingredients:ingredients,steps:steps,favorite:favorite ?? this.favorite);
-  Map<String,dynamic> toJson() => {'id':id,'title':title,'category':category,'time':time,'description':description,'ingredients':ingredients,'steps':steps,'favorite':favorite};
+  const Recipe({required this.id, required this.title, required this.category, required this.time, required this.description, required this.ingredients, required this.steps, this.country = 'العالم العربي', this.favorite = false});
+  Recipe copyWith({bool? favorite, String? country}) => Recipe(id:id,title:title,category:category,time:time,description:description,ingredients:ingredients,steps:steps,country:country ?? this.country,favorite:favorite ?? this.favorite);
+  Map<String,dynamic> toJson() => {'id':id,'title':title,'category':category,'time':time,'description':description,'country':country,'ingredients':ingredients,'steps':steps,'favorite':favorite};
   factory Recipe.fromJson(Map<String,dynamic> j) => Recipe(
     id:j['id'] ?? DateTime.now().microsecondsSinceEpoch.toString(),
     title:j['title'] ?? '', category:j['category'] ?? 'بيتي', time:j['time'] ?? '',
-    description:j['description'] ?? '', ingredients:List<String>.from(j['ingredients'] ?? []),
+    description:j['description'] ?? '', country:j['country'] ?? 'العالم العربي', ingredients:List<String>.from(j['ingredients'] ?? []),
     steps:List<String>.from(j['steps'] ?? []), favorite:j['favorite'] ?? false);
 }
 
@@ -73,12 +74,17 @@ class SmartRecipeEngine {
     'bulgur': 'برغل', 'freekeh': 'فريك', 'thyme': 'زعتر',
     'parsley': 'بقدونس', 'mint': 'نعناع', 'coriander': 'كزبره',
     'ليمون': 'ليمون', 'lemon': 'ليمون',
+    'tomato sauce': 'طماطم', 'passata': 'طماطم', 'canned tomatoes': 'طماطم',
+    'rice vermicelli': 'شعرية', 'vermicelli': 'شعرية', 'semolina': 'سميد',
+    'olive oil': 'زيت زيتون', 'yogurt': 'زبادي', 'coconut': 'جوز الهند',
   };
 
   static const Set<String> _staples = {'ملح', 'فلفل', 'زيت', 'ماء', 'سكر', 'خل'};
 
   static String normalize(String value) {
     var x = value.toLowerCase().trim();
+    x = x.replaceAll(RegExp(r'\b\d+(?:[.,]\d+)?\b'), ' ');
+    x = x.replaceAll(RegExp(r'\b(?:كوب|أكواب|ملعقة|ملاعق|جرام|غرام|كيلو|كجم|مل|لتر|قطعة|حبة|حبات)\b'), ' ');
     x = x
         .replaceAll(RegExp(r'[ًٌٍَُِّْـ]'), '')
         .replaceAll('أ', 'ا')
@@ -97,11 +103,14 @@ class SmartRecipeEngine {
   static bool _matches(String pantryItem, String ingredient) {
     final p = normalize(pantryItem);
     final i = normalize(ingredient);
-    if (p == i || p.contains(i) || i.contains(p)) return true;
-    final pTokens = p.split(' ').toSet();
-    final iTokens = i.split(' ').toSet();
-    return pTokens.intersection(iTokens).isNotEmpty &&
-        (pTokens.length == 1 || iTokens.length == 1);
+    if (p.isEmpty || i.isEmpty) return false;
+    if (p == i) return true;
+    final pTokens = p.split(' ').where((x) => x.isNotEmpty).toSet();
+    final iTokens = i.split(' ').where((x) => x.isNotEmpty).toSet();
+    final shared = pTokens.intersection(iTokens);
+    if (shared.isEmpty) return false;
+    if (pTokens.length == 1 || iTokens.length == 1) return true;
+    return shared.length >= (pTokens.length < iTokens.length ? pTokens.length : iTokens.length);
   }
 
   static int _minutes(String value) {
@@ -209,7 +218,23 @@ List<String> parseSteps(String value) => value
 
 
 
-List<Recipe> starterRecipes() => arabicRecipeSeedData.map((entry) => Recipe.fromJson(entry)).toList();
+List<Recipe> starterRecipes() => [
+  ...arabicRecipeSeedData.map((entry) => Recipe.fromJson(entry)),
+  ...expandedArabicRecipeData.map((entry) => Recipe.fromJson(entry)),
+];
+
+List<Recipe> filterRecipes(List<Recipe> source, String query, {String country = 'الكل'}) {
+  final q = SmartRecipeEngine.normalize(query);
+  final tokens = q.split(' ').where((x) => x.isNotEmpty).toList();
+  return source.where((r) {
+    if (country != 'الكل' && r.country != country) return false;
+    if (tokens.isEmpty) return true;
+    final haystack = [r.title, r.country, r.category, ...r.ingredients]
+        .map(SmartRecipeEngine.normalize)
+        .join(' ');
+    return tokens.every(haystack.contains);
+  }).toList();
+}
 
 void main() => runApp(const CozyMamaApp());
 
@@ -225,8 +250,16 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   List<Recipe> recipes = starterRecipes();
   Map<String, int> recipeUseCount = {};
   List<String> recentRecipeIds = [];
+  String recipeQuery = '';
+  String selectedCountry = 'الكل';
+  final TextEditingController recipeSearchController = TextEditingController();
 
   @override void initState() { super.initState(); load(); }
+
+  @override void dispose() {
+    recipeSearchController.dispose();
+    super.dispose();
+  }
 
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
@@ -279,6 +312,8 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   List<Recipe> get suggestions =>
       smartSuggestions.map((x) => x.recipe).toList();
 
+  List<Recipe> get filteredRecipes => filterRecipes(recipes, recipeQuery, country: selectedCountry);
+
   @override Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner:false, title:'مطبخي الدافي',
     navigatorKey:navigatorKey,theme:ThemeData(useMaterial3:true,scaffoldBackgroundColor:cream,colorScheme:ColorScheme.fromSeed(seedColor:rose)),
@@ -312,19 +347,44 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     ]);
   }
 
-  Widget recipesPage() => ListView(padding:const EdgeInsets.fromLTRB(18,10,18,90),children:[section('وصفاتي','${recipes.length} وصفة محفوظة'),const SizedBox(height:12),...recipes.map(recipeCard)]);
-  Widget suggestionsPage() => ListView(padding:const EdgeInsets.all(18),children:[
-    Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:const Color(0xFFE7F0E5),borderRadius:BorderRadius.circular(24)),child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Icon(Icons.auto_awesome_rounded,color:sage,size:30),SizedBox(height:8),
-      Text('اقتراحات ذكية من مطبخك',style:TextStyle(fontSize:21,fontWeight:FontWeight.w900,color:brown)),
-      SizedBox(height:5),Text('الترتيب بيتعلم من المفضلة والوصفات اللي طبختيها، وبيوضح لك المتوفر والناقص.',style:TextStyle(color:brown,height:1.4))
-    ])),
-    const SizedBox(height:18),
-    if(smartSuggestions.isEmpty)
-      empty('لسه مفيش اقتراح مناسب. ضيفي مكونات أكتر أو احفظي وصفات جديدة.')
-    else
-      ...smartSuggestions.map(smartSuggestionCard),
-  ]);
+  Widget recipesPage() {
+    final list = filteredRecipes;
+    return Column(children: [
+      Padding(padding: const EdgeInsets.fromLTRB(18, 10, 18, 0), child: section('وصفاتي', '\${list.length} ظاهر من \${recipes.length} وصفة')),
+      Padding(padding: const EdgeInsets.fromLTRB(18, 12, 18, 8), child: TextField(
+        controller: recipeSearchController, onChanged: (value) => setState(() => recipeQuery = value), textDirection: TextDirection.rtl,
+        decoration: InputDecoration(hintText: 'ابحثي باسم الوصفة أو المكوّن…', prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: recipeQuery.isEmpty ? null : IconButton(onPressed: () { recipeSearchController.clear(); setState(() => recipeQuery = ''); }, icon: const Icon(Icons.clear_rounded)),
+          filled: true, fillColor: Colors.white70, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)),
+      )),
+      Padding(padding: const EdgeInsets.fromLTRB(18, 0, 18, 12), child: DropdownButtonFormField<String>(
+        initialValue: selectedCountry, isExpanded: true, onChanged: (value) => setState(() => selectedCountry = value ?? 'الكل'),
+        decoration: InputDecoration(labelText: 'المطبخ', filled: true, fillColor: Colors.white70, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)),
+        items: [const DropdownMenuItem(value: 'الكل', child: Text('كل المطابخ')), ...arabWorldCountries.map((country) => DropdownMenuItem(value: country, child: Text(country)))],
+      )),
+      Expanded(child: list.isEmpty ? Center(child: empty('مفيش وصفات مطابقة للبحث أو المطبخ المختار.')) : ListView.builder(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 90), itemCount: list.length, itemBuilder: (_, index) => recipeCard(list[index]),
+      )),
+    ]);
+  }
+  Widget suggestionsPage() {
+    final list = smartSuggestions;
+    return ListView.builder(
+      padding: const EdgeInsets.all(18), itemCount: list.isEmpty ? 1 : list.length + 1,
+      itemBuilder: (_, index) {
+        if (index == 0) return Container(
+          padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFFE7F0E5), borderRadius: BorderRadius.circular(24)),
+          child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(Icons.auto_awesome_rounded, color: sage, size: 30), SizedBox(height: 8),
+            Text('اقتراحات ذكية من مطبخك', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: brown)),
+            SizedBox(height: 5), Text('الترتيب بيتعلم من المفضلة والوصفات اللي طبختيها، وبيوضح لك المتوفر والناقص.', style: TextStyle(color: brown, height: 1.4)),
+          ]),
+        );
+        if (list.isEmpty) return empty('لسه مفيش اقتراح مناسب. ضيفي مكونات أكتر أو احفظي وصفات جديدة.');
+        return smartSuggestionCard(list[index - 1]);
+      },
+    );
+  }
   Widget favoritesPage() {
     final list = recipes.where((r)=>r.favorite).toList();
     return ListView(padding:const EdgeInsets.all(18),children:[section('المفضلة','الوصفات اللي بتحبي ترجعي لها'),const SizedBox(height:12),...list.map(recipeCard),if(list.isEmpty) empty('اضغطي على القلب جنب أي وصفة عشان تلاقيها هنا بسرعة.')]);
@@ -416,7 +476,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       Container(width:58,height:58,decoration:BoxDecoration(color:peach.withValues(alpha: .25),borderRadius:BorderRadius.circular(18)),child:const Icon(Icons.restaurant_rounded,color:rose,size:29)),
       const SizedBox(width:13),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(r.title,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:16,color:brown)),const SizedBox(height:5),
-        Text('${r.category} • ${r.time}',style:TextStyle(color:brown.withValues(alpha: .65)))
+        Text('${r.country} • ${r.category} • ${r.time}',style:TextStyle(color:brown.withValues(alpha: .65)))
       ])),
       IconButton(onPressed:()=>toggleFavorite(r),icon:Icon(r.favorite?Icons.favorite_rounded:Icons.favorite_border_rounded,color:r.favorite?rose:brown.withValues(alpha: .5)))
     ])))
@@ -466,7 +526,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       ])),
       actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('إلغاء')),FilledButton(onPressed:(){
         if(title.text.trim().isEmpty)return;
-        final r=Recipe(id:DateTime.now().microsecondsSinceEpoch.toString(),title:title.text.trim(),category:'بيتي',time:time.text.trim().isEmpty?'غير محدد':time.text.trim(),description:'وصفة من مطبخك.',ingredients:parseIngredients(ingredients.text),steps:parseSteps(steps.text));
+        final r=Recipe(id:DateTime.now().microsecondsSinceEpoch.toString(),title:title.text.trim(),category:'بيتي',time:time.text.trim().isEmpty?'غير محدد':time.text.trim(),description:'وصفة من مطبخك.',country:'وصفة شخصية',ingredients:parseIngredients(ingredients.text),steps:parseSteps(steps.text));
         setState(()=>recipes.insert(0,r));save();Navigator.pop(dialogContext);
       },child:const Text('حفظ'))]
     )));
