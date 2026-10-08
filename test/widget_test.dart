@@ -47,6 +47,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('المكونات'), findsOneWidget);
-    expect(find.text('الخطوات'), findsOneWidget);
+    expect(find.text('الطريقة'), findsOneWidget);
   });
 }
