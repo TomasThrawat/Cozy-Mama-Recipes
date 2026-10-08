@@ -21,7 +21,7 @@ void main() {
 
     await tester.tap(find.text('اقترحي لي'));
     await tester.pumpAndSettle();
-    expect(find.text('اقتراحات من مطبخك'), findsOneWidget);
+    expect(find.text('اقتراحات ذكية من مطبخك'), findsOneWidget);
 
     await tester.tap(find.text('الرئيسية'));
     await tester.pumpAndSettle();
