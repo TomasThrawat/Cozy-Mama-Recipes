@@ -944,7 +944,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
     final shown = scaled == scaled.roundToDouble()
         ? scaled.toInt().toString()
         : scaled.toStringAsFixed(1);
-    return '${shown} ${match.group(2)!}';
+    return '$shown ${match.group(2)!}';
   }
 
   Future<void> _recipeDetails(Recipe recipe) async {
