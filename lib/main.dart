@@ -76,7 +76,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
         IconButton(onPressed:showPantry,icon:const Icon(Icons.kitchen_rounded,color:brown))
       ]),
       body:IndexedStack(index:tab,children:[home(), recipesPage(), suggestionsPage(), favoritesPage()]),
-      bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),backgroundColor:card,indicatorColor:peach.withOpacity(.35),destinations:const[
+      bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),backgroundColor:card,indicatorColor:peach.withValues(alpha: .35),destinations:const[
         NavigationDestination(icon:Icon(Icons.home_rounded),label:'الرئيسية'),
         NavigationDestination(icon:Icon(Icons.menu_book_rounded),label:'وصفاتي'),
         NavigationDestination(icon:Icon(Icons.auto_awesome_rounded),label:'اقترحي لي'),
@@ -117,18 +117,18 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   }
 
   Widget section(String title,String sub) => Row(children:[
-    Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:21,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:3),Text(sub,style:TextStyle(color:brown.withOpacity(.65)))])),
+    Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:21,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:3),Text(sub,style:TextStyle(color:brown.withValues(alpha: .65)))])),
     const Icon(Icons.restaurant_menu_rounded,color:rose)
   ]);
 
   Widget recipeCard(Recipe r) => Card(color:card,elevation:0,margin:const EdgeInsets.only(bottom:12),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),child:InkWell(
     borderRadius:BorderRadius.circular(22),onTap:()=>details(r),child:Padding(padding:const EdgeInsets.all(16),child:Row(children:[
-      Container(width:58,height:58,decoration:BoxDecoration(color:peach.withOpacity(.25),borderRadius:BorderRadius.circular(18)),child:const Icon(Icons.restaurant_rounded,color:rose,size:29)),
+      Container(width:58,height:58,decoration:BoxDecoration(color:peach.withValues(alpha: .25),borderRadius:BorderRadius.circular(18)),child:const Icon(Icons.restaurant_rounded,color:rose,size:29)),
       const SizedBox(width:13),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(r.title,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:16,color:brown)),const SizedBox(height:5),
-        Text(r.category + ' • ' + r.time,style:TextStyle(color:brown.withOpacity(.65)))
+        Text(r.category + ' • ' + r.time,style:TextStyle(color:brown.withValues(alpha: .65)))
       ])),
-      IconButton(onPressed:()=>toggleFavorite(r),icon:Icon(r.favorite?Icons.favorite_rounded:Icons.favorite_border_rounded,color:r.favorite?rose:brown.withOpacity(.5)))
+      IconButton(onPressed:()=>toggleFavorite(r),icon:Icon(r.favorite?Icons.favorite_rounded:Icons.favorite_border_rounded,color:r.favorite?rose:brown.withValues(alpha: .5)))
     ])))
   );
 
@@ -138,7 +138,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   void details(Recipe r) => showModalBottomSheet(context:context,isScrollControlled:true,backgroundColor:cream,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:DraggableScrollableSheet(expand:false,initialChildSize:.72,builder:(_,c)=>ListView(controller:c,padding:const EdgeInsets.all(22),children:[
     Text(r.title,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:7),
-    Text(r.category + ' • ' + r.time,style:TextStyle(color:brown.withOpacity(.65))),const SizedBox(height:15),
+    Text(r.category + ' • ' + r.time,style:TextStyle(color:brown.withValues(alpha: .65))),const SizedBox(height:15),
     Text(r.description,style:const TextStyle(color:brown,height:1.5)),const SizedBox(height:22),
     const Text('المكونات',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800,color:brown)),const SizedBox(height:8),
     ...r.ingredients.map((x)=>ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.check_circle_rounded,color:sage),title:Text(x))),
