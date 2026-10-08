@@ -154,11 +154,11 @@ class SmartRecipeEngine {
               normalizedPantry.length;
 
       var score = (coverage * 55).round();
-      score += (matched.length * 7).clamp(0, 28);
+      score += (matched.length * 7).clamp(0, 28).toInt();
       score += (pantryUse * 10).round();
-      score -= (missing.length * 3).clamp(0, 18);
+      score -= (missing.length * 3).clamp(0, 18).toInt();
       if (recipe.favorite) score += 6;
-      score += ((history[recipe.id] ?? 0) * 2).clamp(0, 8);
+      score += ((history[recipe.id] ?? 0) * 2).clamp(0, 8).toInt();
 
       final recentIndex = recentRecipeIds.indexOf(recipe.id);
       if (recentIndex >= 0 && recentIndex < 3) score -= 5 - recentIndex;
@@ -171,7 +171,7 @@ class SmartRecipeEngine {
         recipe: recipe,
         matched: matched,
         missing: missing,
-        score: score.clamp(1, 100),
+        score: score.clamp(1, 100).toInt(),
         coverage: coverage,
         reason: _reason(coverage, matched, missing, recipe, history),
       ));

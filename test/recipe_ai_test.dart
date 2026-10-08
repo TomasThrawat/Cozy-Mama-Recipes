@@ -51,10 +51,8 @@ void main() {
     expect(results, isNotEmpty);
     expect(results.first.matched.first, 'بطاطس');
   });
-}
 
-
-  test('Arabic catalog covers the common food set and beans are directly discoverable', () {
+  test('Arabic catalog covers common food and beans are directly discoverable', () {
     final recipes = starterRecipes();
     expect(recipes.length, greaterThanOrEqualTo(100));
     final results = SmartRecipeEngine.rank(['فاصوليا'], recipes);
@@ -73,3 +71,6 @@ void main() {
     );
     expect(learned.first.recipe.id, equals(first.id));
   });
+
+}
+
