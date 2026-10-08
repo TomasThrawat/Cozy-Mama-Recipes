@@ -31,6 +31,7 @@ class CozyMamaApp extends StatefulWidget {
 }
 
 class _CozyMamaAppState extends State<CozyMamaApp> {
+  final navigatorKey = GlobalKey<NavigatorState>();
   int tab = 0;
   List<String> pantry = ['بطاطس','بيض','طماطم','بصل','أرز','دجاج','مكرونة','جبنة'];
   List<Recipe> recipes = [
@@ -70,7 +71,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   @override Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner:false, title:'مطبخي الدافي',
-    theme:ThemeData(useMaterial3:true,scaffoldBackgroundColor:cream,colorScheme:ColorScheme.fromSeed(seedColor:rose)),
+    navigatorKey:navigatorKey,theme:ThemeData(useMaterial3:true,scaffoldBackgroundColor:cream,colorScheme:ColorScheme.fromSeed(seedColor:rose)),
     home:Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       appBar:AppBar(backgroundColor:cream,elevation:0,title:const Text('مطبخي الدافي',style:TextStyle(fontWeight:FontWeight.w900,color:brown)),actions:[
         IconButton(onPressed:showPantry,icon:const Icon(Icons.kitchen_rounded,color:brown))
@@ -136,7 +137,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   void toggleFavorite(Recipe r) { setState(()=>recipes=recipes.map((x)=>x.id==r.id?x.copyWith(favorite:!x.favorite):x).toList()); save(); }
 
-  void details(Recipe r) => showModalBottomSheet(context:context,isScrollControlled:true,backgroundColor:cream,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:DraggableScrollableSheet(expand:false,initialChildSize:.72,builder:(_,c)=>ListView(controller:c,padding:const EdgeInsets.all(22),children:[
+  void details(Recipe r) => showModalBottomSheet(context:navigatorKey.currentState!.context,isScrollControlled:true,backgroundColor:cream,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:DraggableScrollableSheet(expand:false,initialChildSize:.72,builder:(_,c)=>ListView(controller:c,padding:const EdgeInsets.all(22),children:[
     Text(r.title,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:7),
     Text('${r.category} • ${r.time}',style:TextStyle(color:brown.withValues(alpha: .65))),const SizedBox(height:15),
     Text(r.description,style:const TextStyle(color:brown,height:1.5)),const SizedBox(height:22),
@@ -148,7 +149,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   Future<void> addRecipe() async {
     final title=TextEditingController(), ingredients=TextEditingController(), steps=TextEditingController(), time=TextEditingController();
-    await showDialog(context:context,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
+    await showDialog(context:navigatorKey.currentState!.context,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
       backgroundColor:cream,title:const Text('وصفة جديدة',style:TextStyle(color:brown,fontWeight:FontWeight.w900)),
       content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
         field(title,'اسم الوصفة'),field(ingredients,'المكونات — افصلي بينها بفاصلة'),field(steps,'الطريقة — كل خطوة في سطر'),field(time,'الوقت، مثال: 30 دقيقة')
@@ -165,7 +166,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   Future<void> showPantry() async {
     final c=TextEditingController();
-    await showModalBottomSheet(context:context,backgroundColor:cream,isScrollControlled:true,builder:(_)=>StatefulBuilder(builder:(context,sheet)=>Directionality(textDirection:TextDirection.rtl,child:Padding(
+    await showModalBottomSheet(context:navigatorKey.currentState!.context,backgroundColor:cream,isScrollControlled:true,builder:(_)=>StatefulBuilder(builder:(context,sheet)=>Directionality(textDirection:TextDirection.rtl,child:Padding(
       padding:EdgeInsets.fromLTRB(18,20,18,MediaQuery.of(context).viewInsets.bottom+20),
       child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
         const Text('مكونات البيت',style:TextStyle(fontSize:23,fontWeight:FontWeight.w900,color:brown)),
