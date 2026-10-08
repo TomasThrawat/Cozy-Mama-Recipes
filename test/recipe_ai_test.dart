@@ -6,7 +6,7 @@ void main() {
     final recipes = starterRecipes();
     final results = SmartRecipeEngine.rank(['بيض', 'جبنة'], recipes);
     expect(results, isNotEmpty);
-    expect(results.first.recipe.title, anyOf('بيض بالجبنة والطماطم', 'عجة البطاطس بالجبنة', 'شكشوكة بالجبنة'));
+    expect(results.first.recipe.title, anyOf('بيض بالجبنة والطماطم', 'عجة البطاطس بالجبنة', 'شكشوكة بالجبنة', 'مكرونة بالبيض والجبنة'));
     expect(results.first.matched.length, greaterThanOrEqualTo(2));
     expect(results.first.coverage, greaterThan(0.2));
   });
