@@ -138,7 +138,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   void details(Recipe r) => showModalBottomSheet(context:context,isScrollControlled:true,backgroundColor:cream,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:DraggableScrollableSheet(expand:false,initialChildSize:.72,builder:(_,c)=>ListView(controller:c,padding:const EdgeInsets.all(22),children:[
     Text(r.title,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:7),
-    Text(r.category + ' • ' + r.time,style:TextStyle(color:brown.withValues(alpha: .65))),const SizedBox(height:15),
+    Text('${r.category} • ${r.time}',style:TextStyle(color:brown.withValues(alpha: .65))),const SizedBox(height:15),
     Text(r.description,style:const TextStyle(color:brown,height:1.5)),const SizedBox(height:22),
     const Text('المكونات',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800,color:brown)),const SizedBox(height:8),
     ...r.ingredients.map((x)=>ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.check_circle_rounded,color:sage),title:Text(x))),
