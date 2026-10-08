@@ -47,6 +47,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('المكونات'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('الطريقة'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('الطريقة'), findsOneWidget);
   });
 }
