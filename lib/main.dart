@@ -101,7 +101,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     ]);
   }
 
-  Widget recipesPage() => ListView(padding:const EdgeInsets.fromLTRB(18,10,18,90),children:[section('وصفاتي',recipes.length.toString() + ' وصفة محفوظة'),const SizedBox(height:12),...recipes.map(recipeCard)]);
+  Widget recipesPage() => ListView(padding:const EdgeInsets.fromLTRB(18,10,18,90),children:[section('وصفاتي','${recipes.length} وصفة محفوظة'),const SizedBox(height:12),...recipes.map(recipeCard)]);
   Widget suggestionsPage() => ListView(padding:const EdgeInsets.all(18),children:[
     Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:const Color(0xFFE7F0E5),borderRadius:BorderRadius.circular(24)),child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Icon(Icons.auto_awesome_rounded,color:sage,size:30),SizedBox(height:8),
@@ -126,7 +126,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       Container(width:58,height:58,decoration:BoxDecoration(color:peach.withValues(alpha: .25),borderRadius:BorderRadius.circular(18)),child:const Icon(Icons.restaurant_rounded,color:rose,size:29)),
       const SizedBox(width:13),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(r.title,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:16,color:brown)),const SizedBox(height:5),
-        Text(r.category + ' • ' + r.time,style:TextStyle(color:brown.withValues(alpha: .65)))
+        Text('${r.category} • ${r.time}',style:TextStyle(color:brown.withValues(alpha: .65)))
       ])),
       IconButton(onPressed:()=>toggleFavorite(r),icon:Icon(r.favorite?Icons.favorite_rounded:Icons.favorite_border_rounded,color:r.favorite?rose:brown.withValues(alpha: .5)))
     ])))
