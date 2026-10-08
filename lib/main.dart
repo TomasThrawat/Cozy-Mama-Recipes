@@ -207,23 +207,6 @@ List<String> parseSteps(String value) => value
     .where((x) => x.isNotEmpty)
     .toList();
 
-List<String> parseIngredients(String value) => value
-    .split(RegExp(r'[,،\n]+'))
-    .map((x) => x.trim())
-    .where((x) => x.isNotEmpty)
-    .fold<List<String>>([], (out, item) {
-      if (!out.any((x) => SmartRecipeEngine.normalize(x) == SmartRecipeEngine.normalize(item))) {
-        out.add(item);
-      }
-      return out;
-    });
-
-List<String> parseSteps(String value) => value
-    .split(RegExp(r'[\r\n]+'))
-    .map((x) => x.trim().replaceFirst(RegExp(r'^\d+[.)\-]\s*'), ''))
-    .where((x) => x.isNotEmpty)
-    .toList();
-
 
 
 List<Recipe> starterRecipes() => arabicRecipeSeedData.map((entry) => Recipe.fromJson(entry)).toList();
@@ -358,7 +341,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     final missingPreview = suggestion.missing.take(3).join('، ');
     final missingText = suggestion.missing.isEmpty
         ? 'المكونات الأساسية كلها موجودة'
-        : 'ناقص: ' + missingPreview + (suggestion.missing.length > 3 ? '…' : '');
+        : 'ناقص: $missingPreview${suggestion.missing.length > 3 ? '…' : ''}';
 
     return Card(
       color: card,
@@ -390,7 +373,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
                     children: [
                       Text(r.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: brown)),
                       const SizedBox(height: 5),
-                      Text(r.category + ' • ' + r.time, style: TextStyle(color: brown.withValues(alpha: .65))),
+                      Text('${r.category} • ${r.time}', style: TextStyle(color: brown.withValues(alpha: .65))),
                     ],
                   ),
                 ),
@@ -400,17 +383,17 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
                     color: suggestion.score >= 75 ? const Color(0xFFE2F1E2) : const Color(0xFFFFEBDD),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Text(suggestion.score.toString() + '%', style: const TextStyle(color: brown, fontWeight: FontWeight.w900)),
+                  child: Text('${suggestion.score}%', style: const TextStyle(color: brown, fontWeight: FontWeight.w900)),
                 ),
               ]),
               const SizedBox(height: 12),
               Text(suggestion.reason, style: const TextStyle(color: brown, fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
-              Text('متوفر: ' + suggestion.matched.take(4).join('، '), style: TextStyle(color: brown.withValues(alpha: .78))),
+              Text('متوفر: ${suggestion.matched.take(4).join('، ')}', style: TextStyle(color: brown.withValues(alpha: .78))),
               const SizedBox(height: 3),
               Text(missingText, style: TextStyle(color: suggestion.missing.isEmpty ? sage : brown.withValues(alpha: .65))),
               const SizedBox(height: 6),
-              Text(percent.toString() + '% من المكونات المطلوبة موجودة', style: TextStyle(color: brown.withValues(alpha: .55), fontSize: 12)),
+              Text('$percent% من المكونات المطلوبة موجودة', style: TextStyle(color: brown.withValues(alpha: .55), fontSize: 12)),
               Align(
                 alignment: Alignment.centerLeft,
                 child: IconButton(
@@ -448,7 +431,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     });
     save();
     ScaffoldMessenger.of(navigatorKey.currentState!.context).showSnackBar(
-      SnackBar(content: Text('اتسجلت ' + r.title + ' في تاريخ وصفاتك')),
+      SnackBar(content: Text('اتسجلت ${r.title} في تاريخ وصفاتك')),
     );
   }
 
