@@ -7,9 +7,10 @@ void main() {
     await tester.pumpWidget(const CozyMamaApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('مطبخي الدافي'), findsOneWidget);
-    expect(find.text('الرئيسية'), findsOneWidget);
-    expect(find.text('وصفاتي'), findsOneWidget);
+    expect(find.text('أهلاً يا ماما'), findsOneWidget);
+    expect(find.text('مكونات البيت'), findsOneWidget);
+    expect(find.text('اقتراحات من مطبخي'), findsNothing);
+    expect(find.text('وصفاتك'), findsOneWidget);
   });
 
   testWidgets('navigation and pantry controls respond', (tester) async {
@@ -18,40 +19,51 @@ void main() {
 
     await tester.tap(find.text('وصفاتي'));
     await tester.pumpAndSettle();
-    expect(find.text('وصفة جديدة'), findsOneWidget);
+    expect(find.text('وصفاتي'), findsWidgets);
 
-    await tester.tap(find.text('وصفة جديدة'));
+    await tester.tap(find.text('اقترحي لي'));
     await tester.pumpAndSettle();
-    expect(find.text('اسم الوصفة'), findsOneWidget);
+    expect(find.text('اقتراحات من مطبخك'), findsOneWidget);
 
-    await tester.tap(find.text('إلغاء'));
+    await tester.tap(find.text('الرئيسية'));
     await tester.pumpAndSettle();
-
     await tester.tap(find.byIcon(Icons.kitchen_rounded));
     await tester.pumpAndSettle();
     expect(find.text('مكونات البيت'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.add_rounded).last);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('recipe details and favorite controls respond', (tester) async {
     await tester.pumpWidget(const CozyMamaApp());
     await tester.pumpAndSettle();
 
-    final favorite = find.byIcon(Icons.favorite_border_rounded).first;
-    await tester.tap(favorite);
+    await tester.tap(find.text('وصفاتي'));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.favorite_rounded), findsWidgets);
 
-    final recipeTitle = find.text('مكرونة بالصوص الكريمي');
-    expect(recipeTitle, findsWidgets);
-    await tester.tap(recipeTitle.first);
+    final borderFinder = find.byIcon(Icons.favorite_border_rounded);
+    final beforeBorderCount = borderFinder.evaluate().length;
+    expect(beforeBorderCount, greaterThan(0));
+
+    await tester.tap(borderFinder.first);
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.favorite_border_rounded).evaluate().length, beforeBorderCount - 1);
+
+    final recipeTitle = find.text(starterRecipes().first.title);
+    expect(recipeTitle, findsOneWidget);
+    await tester.tap(recipeTitle);
     await tester.pumpAndSettle();
 
     expect(find.text('المكونات'), findsOneWidget);
+    expect(find.text('الطريقة'), findsOneWidget);
+
+    final stepFinder = find.text(starterRecipes().first.steps.last);
     await tester.scrollUntilVisible(
-      find.text('الطريقة'),
+      stepFinder,
       300,
       scrollable: find.byType(Scrollable).last,
     );
-    expect(find.text('الطريقة'), findsOneWidget);
+    expect(stepFinder, findsOneWidget);
   });
 }
