@@ -257,16 +257,16 @@ RecipeDiagnostics repairRecipeLibrary(List<Recipe> source) {
     final original = source[index];
     var id = original.id.trim();
     if (id.isEmpty || usedIds.contains(id)) {
-      id = 'repaired-' + (index + 1).toString();
+      id = 'repaired-${index + 1}';
     }
     usedIds.add(id);
 
     final title = original.title.trim().isEmpty
-        ? 'وصفة بدون اسم ' + (index + 1).toString()
+        ? 'وصفة بدون اسم ${index + 1}'
         : original.title.trim();
     final time = original.time.trim().isEmpty ? 'غير محدد' : original.time.trim();
     final description = original.description.trim().isEmpty
-        ? title + ' بطابع بيتي.'
+        ? '$title بطابع بيتي.'
         : original.description.trim();
 
     final ingredients = <String>[];
@@ -288,8 +288,8 @@ RecipeDiagnostics repairRecipeLibrary(List<Recipe> source) {
       }
     }
 
-    if (ingredients.isEmpty) manualIssues.add(title + ': محتاجة مكونات.');
-    if (steps.isEmpty) manualIssues.add(title + ': محتاجة خطوات تحضير.');
+    if (ingredients.isEmpty) manualIssues.add('$title: محتاجة مكونات.');
+    if (steps.isEmpty) manualIssues.add('$title: محتاجة خطوات تحضير.');
 
     if (id != original.id ||
         title != original.title.trim() ||
@@ -429,8 +429,7 @@ void showCookingConversionDialog(BuildContext context, Recipe recipe) {
               ),
               const SizedBox(height: 12),
               Text(
-                'المقترح: ' + converted['temperatureC'].toString() + '°C لمدة ' +
-                    converted['minutes'].toString() + ' دقيقة',
+                'المقترح: ${converted['temperatureC']}°C لمدة ${converted['minutes']} دقيقة',
                 style: const TextStyle(color: brown, fontWeight: FontWeight.w900),
               ),
             ]),
@@ -767,16 +766,16 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
           title: const Text('فحص الوصفات', style: TextStyle(color: brown, fontWeight: FontWeight.w900)),
           content: SingleChildScrollView(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('وصفات اتصلحت: ' + result.repairedCount.toString()),
-              Text('تكرارات مكونات اتشالت: ' + result.duplicateIngredientsRemoved.toString()),
-              Text('تكرارات خطوات اتشالت: ' + result.duplicateStepsRemoved.toString()),
+              Text('وصفات اتصلحت: ${result.repairedCount}'),
+              Text('تكرارات مكونات اتشالت: ${result.duplicateIngredientsRemoved}'),
+              Text('تكرارات خطوات اتشالت: ${result.duplicateStepsRemoved}'),
               const SizedBox(height: 10),
               if (result.manualIssues.isEmpty)
                 const Text('مفيش مشاكل محتاجة تدخل يدوي.')
               else ...[
                 const Text('محتاج إدخال يدوي:', style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 5),
-                ...result.manualIssues.take(20).map((x) => Text('• ' + x, style: const TextStyle(height: 1.4))),
+                ...result.manualIssues.take(20).map((x) => Text('• $x', style: const TextStyle(height: 1.4))),
               ],
             ]),
           ),
