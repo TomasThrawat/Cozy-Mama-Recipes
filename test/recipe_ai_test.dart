@@ -52,3 +52,24 @@ void main() {
     expect(results.first.matched.first, 'بطاطس');
   });
 }
+
+
+  test('Arabic catalog covers the common food set and beans are directly discoverable', () {
+    final recipes = starterRecipes();
+    expect(recipes.length, greaterThanOrEqualTo(100));
+    final results = SmartRecipeEngine.rank(['فاصوليا'], recipes);
+    expect(results.any((x) => x.recipe.title.contains('فاصوليا')), isTrue);
+  });
+
+  test('smart ranking can use cooking history', () {
+    final recipes = starterRecipes();
+    final base = SmartRecipeEngine.rank(['بيض', 'جبنة'], recipes);
+    final first = base.first.recipe;
+    final learned = SmartRecipeEngine.rank(
+      ['بيض', 'جبنة'],
+      recipes,
+      history: {first.id: 4},
+      recentRecipeIds: const [],
+    );
+    expect(learned.first.recipe.id, equals(first.id));
+  });

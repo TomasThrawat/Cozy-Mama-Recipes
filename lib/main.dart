@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'recipe_seed_data.dart';
 
 const cream = Color(0xFFFFF8EE);
 const peach = Color(0xFFF3B39B);
@@ -30,6 +31,7 @@ class SmartSuggestion {
   final List<String> missing;
   final int score;
   final double coverage;
+  final String reason;
 
   const SmartSuggestion({
     required this.recipe,
@@ -37,26 +39,43 @@ class SmartSuggestion {
     required this.missing,
     required this.score,
     required this.coverage,
+    required this.reason,
   });
 }
 
 class SmartRecipeEngine {
   static const Map<String, String> _aliases = {
     'egg': 'بيض', 'eggs': 'بيض', 'بيضة': 'بيض', 'بيضه': 'بيض',
-    'cheese': 'جبنة', 'cheese slices': 'جبنة', 'جبن': 'جبنة', 'جبنه': 'جبنة',
+    'cheese': 'جبن', 'جبنة': 'جبن', 'جبنه': 'جبن', 'جبن': 'جبن',
     'milk': 'لبن', 'حليب': 'لبن',
-    'chicken': 'دجاج', 'فراخ': 'دجاج', 'فراخك': 'دجاج',
+    'chicken': 'دجاج', 'فراخ': 'دجاج', 'دجاجة': 'دجاج', 'دجاجه': 'دجاج',
+    'meat': 'لحم', 'beef': 'لحم', 'لحمة': 'لحم', 'لحمه': 'لحم',
     'potato': 'بطاطس', 'potatoes': 'بطاطس', 'بطاطا': 'بطاطس',
     'tomato': 'طماطم', 'tomatoes': 'طماطم',
-    'onion': 'بصل', 'rice': 'أرز', 'رز': 'أرز',
-    'pasta': 'مكرونة', 'macaroni': 'مكرونة', 'مكرونه': 'مكرونة',
-    'garlic': 'ثوم', 'butter': 'زبدة', 'oil': 'زيت',
-    'carrot': 'جزر', 'carrots': 'جزر', 'peas': 'بازلاء',
-    'bread': 'عيش', 'خبز': 'عيش',
-    'black pepper': 'فلفل أسود', 'pepper': 'فلفل', 'salt': 'ملح',
+    'onion': 'بصل', 'rice': 'ارز', 'رز': 'ارز', 'أرز': 'ارز',
+    'pasta': 'مكرونه', 'macaroni': 'مكرونه', 'مكرونه': 'مكرونه', 'مكرونة': 'مكرونه',
+    'garlic': 'ثوم', 'butter': 'زبد', 'زبدة': 'زبد',
+    'oil': 'زيت', 'carrot': 'جزر', 'carrots': 'جزر',
+    'peas': 'بازلاء', 'بسلة': 'بازلاء',
+    'bread': 'خبز', 'خبز': 'خبز', 'عيش': 'خبز',
+    'black pepper': 'فلفل', 'pepper': 'فلفل', 'فلفل أسود': 'فلفل',
+    'salt': 'ملح',
+    'beans': 'فاصوليا', 'فاصوليا بيضاء': 'فاصوليا', 'فاصوليا خضراء': 'فاصوليا',
+    'green beans': 'فاصوليا', 'chickpeas': 'حمص', 'حمص بطحينة': 'حمص',
+    'fava beans': 'فول', 'فول مدمس': 'فول',
+    'lentils': 'عدس', 'عدس أصفر': 'عدس',
+    'okra': 'بامية', 'eggplant': 'باذنجان',
+    'zucchini': 'كوسه', 'كوسا': 'كوسه', 'كوسة': 'كوسه',
+    'cauliflower': 'قرنبيط', 'shrimp': 'جمبري', 'prawns': 'جمبري',
+    'روبيان': 'جمبري', 'قريدس': 'جمبري', 'fish': 'سمك', 'سمكة': 'سمك',
+    'yogurt': 'زبادي', 'لبن رايب': 'زبادي', 'tahini': 'طحينه',
+    'طحينة': 'طحينه', 'لبنة': 'لبنه', 'لبنه': 'لبنه',
+    'bulgur': 'برغل', 'freekeh': 'فريك', 'thyme': 'زعتر',
+    'parsley': 'بقدونس', 'mint': 'نعناع', 'coriander': 'كزبره',
+    'ليمون': 'ليمون', 'lemon': 'ليمون',
   };
 
-  static const Set<String> _staples = {'ملح', 'فلفل', 'فلفل أسود', 'زيت', 'ماء'};
+  static const Set<String> _staples = {'ملح', 'فلفل', 'زيت', 'ماء', 'سكر', 'خل'};
 
   static String normalize(String value) {
     var x = value.toLowerCase().trim();
@@ -66,55 +85,106 @@ class SmartRecipeEngine {
         .replaceAll('إ', 'ا')
         .replaceAll('آ', 'ا')
         .replaceAll('ى', 'ي')
-        .replaceAll('ة', 'ه')
         .replaceAll('ؤ', 'و')
-        .replaceAll('ئ', 'ي');
-    x = x.replaceAll(RegExp(r'\s+'), ' ');
+        .replaceAll('ئ', 'ي')
+        .replaceAll(RegExp(r'\s+'), ' ');
+    final direct = _aliases[x];
+    if (direct != null) return direct;
+    x = x.replaceAll('ة', 'ه');
     return _aliases[x] ?? x;
   }
 
   static bool _matches(String pantryItem, String ingredient) {
     final p = normalize(pantryItem);
     final i = normalize(ingredient);
-    if (p == i) return true;
-    if (p.contains(i) || i.contains(p)) return true;
+    if (p == i || p.contains(i) || i.contains(p)) return true;
     final pTokens = p.split(' ').toSet();
     final iTokens = i.split(' ').toSet();
-    if (pTokens.intersection(iTokens).isNotEmpty && pTokens.length == 1) return true;
-    return false;
+    return pTokens.intersection(iTokens).isNotEmpty &&
+        (pTokens.length == 1 || iTokens.length == 1);
   }
 
-  static List<SmartSuggestion> rank(List<String> pantry, List<Recipe> recipes) {
+  static int _minutes(String value) {
+    final m = RegExp(r'(\d+)').firstMatch(value);
+    return int.tryParse(m?.group(1) ?? '') ?? 45;
+  }
+
+  static String _reason(
+    double coverage,
+    List<String> matched,
+    List<String> missing,
+    Recipe recipe,
+    Map<String, int> history,
+  ) {
+    if (coverage >= .85 && missing.isEmpty) return 'جاهزة تقريبًا بالموجود عندك';
+    if (coverage >= .7) return 'مناسبة جدًا ومحتاجة مكونات قليلة';
+    if (matched.length >= 3) return 'بتستفيد من كذا مكوّن موجود عندك';
+    if ((history[recipe.id] ?? 0) > 0) return 'وصفة بتحب ترجع لها والمكونات مناسبة';
+    return 'أقرب وصفة متاحة من مكوناتك الحالية';
+  }
+
+  static List<SmartSuggestion> rank(
+    List<String> pantry,
+    List<Recipe> recipes, {
+    Map<String, int> history = const {},
+    List<String> recentRecipeIds = const [],
+  }) {
+    final normalizedPantry = pantry.map(normalize).where((x) => x.isNotEmpty).toSet();
     final results = <SmartSuggestion>[];
+
     for (final recipe in recipes) {
+      final useful = recipe.ingredients.where((x) => !_staples.contains(normalize(x))).toList();
       final matched = <String>[];
       final missing = <String>[];
-      for (final ingredient in recipe.ingredients) {
-        if (_staples.contains(normalize(ingredient))) continue;
-        if (pantry.any((item) => _matches(item, ingredient))) {
+
+      for (final ingredient in useful) {
+        if (normalizedPantry.any((item) => _matches(item, ingredient))) {
           matched.add(ingredient);
         } else {
           missing.add(ingredient);
         }
       }
+
       if (matched.isEmpty) continue;
-      final usefulCount = matched.length + missing.length;
-      final coverage = usefulCount == 0 ? 0.0 : matched.length / usefulCount;
-      final score = matched.length * 30 + (coverage * 25).round() - (missing.length * 2);
+
+      final coverage = useful.isEmpty ? 0.0 : matched.length / useful.length;
+      final pantryUse = pantry.isEmpty
+          ? 0.0
+          : normalizedPantry.where((item) => recipe.ingredients.any((ing) => _matches(item, ing))).length /
+              normalizedPantry.length;
+
+      var score = (coverage * 55).round();
+      score += (matched.length * 7).clamp(0, 28);
+      score += (pantryUse * 10).round();
+      score -= (missing.length * 3).clamp(0, 18);
+      if (recipe.favorite) score += 6;
+      score += ((history[recipe.id] ?? 0) * 2).clamp(0, 8);
+
+      final recentIndex = recentRecipeIds.indexOf(recipe.id);
+      if (recentIndex >= 0 && recentIndex < 3) score -= 5 - recentIndex;
+
+      final minutes = _minutes(recipe.time);
+      if (minutes <= 20) score += 3;
+      if (minutes >= 90) score -= 2;
+
       results.add(SmartSuggestion(
         recipe: recipe,
         matched: matched,
         missing: missing,
-        score: score,
+        score: score.clamp(1, 100),
         coverage: coverage,
+        reason: _reason(coverage, matched, missing, recipe, history),
       ));
     }
+
     results.sort((a, b) {
-      final score = b.score.compareTo(a.score);
-      if (score != 0) return score;
-      final coverage = b.coverage.compareTo(a.coverage);
-      if (coverage != 0) return coverage;
-      return a.recipe.time.compareTo(b.recipe.time);
+      final s = b.score.compareTo(a.score);
+      if (s != 0) return s;
+      final c = b.coverage.compareTo(a.coverage);
+      if (c != 0) return c;
+      final m = a.missing.length.compareTo(b.missing.length);
+      if (m != 0) return m;
+      return _minutes(a.recipe.time).compareTo(_minutes(b.recipe.time));
     });
     return results;
   }
@@ -137,167 +207,26 @@ List<String> parseSteps(String value) => value
     .where((x) => x.isNotEmpty)
     .toList();
 
+List<String> parseIngredients(String value) => value
+    .split(RegExp(r'[,،\n]+'))
+    .map((x) => x.trim())
+    .where((x) => x.isNotEmpty)
+    .fold<List<String>>([], (out, item) {
+      if (!out.any((x) => SmartRecipeEngine.normalize(x) == SmartRecipeEngine.normalize(item))) {
+        out.add(item);
+      }
+      return out;
+    });
+
+List<String> parseSteps(String value) => value
+    .split(RegExp(r'[\r\n]+'))
+    .map((x) => x.trim().replaceFirst(RegExp(r'^\d+[.)\-]\s*'), ''))
+    .where((x) => x.isNotEmpty)
+    .toList();
 
 
-List<Recipe> starterRecipes() => const [
-  Recipe(
-    id:'1', title:'مكرونة بالصوص الكريمي', category:'غداء', time:'25 دقيقة',
-    description:'وجبة دافئة وكريمية بطعم بيتي بسيط، وتنجح بسهولة حتى في الأيام المزدحمة.',
-    ingredients:['مكرونة','لبن','جبنة','زبدة','ثوم','فلفل أسود'],
-    steps:[
-      'جهزي المكونات وقطعي الثوم ناعمًا وابشري الجبنة.',
-      'اغلي الماء وأضيفي رشة ملح، ثم اسلقي المكرونة حتى تنضج مع بقاء قوامها متماسكًا.',
-      'احتفظي بنصف كوب من ماء السلق قبل تصفية المكرونة.',
-      'في طاسة واسعة ذوّبي الزبدة ثم شوّحي الثوم 30 إلى 45 ثانية دون أن يتحمر.',
-      'أضيفي اللبن تدريجيًا مع التقليب، ثم خففي النار حتى يسخن دون غليان قوي.',
-      'أضيفي الجبنة على دفعات وقلبي حتى تذوب ويتجانس الصوص.',
-      'أضيفي المكرونة وقلبي، ثم أضيفي قليلًا من ماء السلق إذا احتاج الصوص أن يصبح أخف.',
-      'تبّلي بالفلفل الأسود واضبطي الملح وقدميها فورًا.',
-    ],
-    favorite:true,
-  ),
-  Recipe(
-    id:'2', title:'صينية بطاطس بالدجاج', category:'غداء', time:'50 دقيقة',
-    description:'صينية بيتية كاملة بالبطاطس والدجاج والبصل والطماطم.',
-    ingredients:['بطاطس','دجاج','بصل','طماطم','ثوم','زيت','ملح','فلفل أسود'],
-    steps:[
-      'سخني الفرن مسبقًا على 200 مئوية.',
-      'قطعي البطاطس شرائح متوسطة والبصل والطماطم، وقطعي الدجاج إلى قطع متقاربة الحجم.',
-      'اخلطي الدجاج مع الثوم والملح والفلفل وقليل من الزيت حتى تتوزع التتبيلة.',
-      'ادهني الصينية بقليل من الزيت ورتبي البطاطس في القاع.',
-      'وزعي البصل والطماطم ثم رتبي الدجاج بالتساوي.',
-      'أضيفي نصف كوب ماء حول أطراف الصينية للمساعدة على استواء البطاطس.',
-      'غطي الصينية بالفويل واخبزيها حوالي 30 دقيقة.',
-      'ارفعي الفويل وأعيديها للفرن حتى ينضج الدجاج وتأخذ الصينية لونًا ذهبيًا.',
-      'اتركيها 5 دقائق قبل التقديم.',
-    ],
-  ),
-  Recipe(
-    id:'3', title:'أرز بالخضار', category:'سريع', time:'30 دقيقة',
-    description:'أرز خفيف بالخضار مناسب لوجبة سريعة من الموجود في البيت.',
-    ingredients:['أرز','جزر','بازلاء','بصل','زيت','ملح'],
-    steps:[
-      'اغسلي الأرز جيدًا وصفيه.',
-      'قطعي البصل مكعبات صغيرة والجزر قطعًا متقاربة الحجم.',
-      'سخني الزيت وشوّحي البصل حتى يلين.',
-      'أضيفي الجزر والبازلاء وقلبي 2 إلى 3 دقائق.',
-      'أضيفي الأرز وقلبيه دقيقة حتى تتغلف الحبات بالزيت.',
-      'أضيفي الماء الساخن والملح واتركي الخليط حتى يبدأ في الغليان.',
-      'خففي النار لأقل درجة وغطي الحلة جيدًا.',
-      'اتركي الأرز حتى يمتص الماء وينضج، ثم أطفئي النار واتركيه مغطى 5 دقائق.',
-      'فككي الأرز بالشوكة وقدميه ساخنًا.',
-    ],
-  ),
-  Recipe(
-    id:'4', title:'بيض بالجبنة والطماطم', category:'سريع', time:'15 دقيقة',
-    description:'وجبة سريعة عندما يكون عندك بيض وجبنة وتريدين استخدام مكونات بسيطة.',
-    ingredients:['بيض','جبنة','طماطم','بصل','زبدة','ملح','فلفل أسود'],
-    steps:[
-      'قطعي البصل والطماطم وابشري الجبنة أو قطعيها شرائح رفيعة.',
-      'اخفقي البيض مع رشة ملح وفلفل حتى يتجانس.',
-      'سخني طاسة غير لاصقة وأضيفي الزبدة.',
-      'شوّحي البصل حتى يلين ثم أضيفي الطماطم حتى تطلق قليلًا من عصارتها.',
-      'خففي النار واسكبي البيض واتركيه يبدأ في التماسك من الأطراف.',
-      'وزعي الجبنة فوق البيض قبل أن يجف تمامًا.',
-      'حركي بهدوء من الأطراف للداخل حتى ينضج دون أن يصبح جافًا.',
-      'أطفئي النار عندما يبقى السطح طريًا قليلًا.',
-      'قدميه فورًا مع العيش أو أي مكوّن متوفر.',
-    ],
-  ),
-  Recipe(
-    id:'5', title:'عجة البطاطس بالجبنة', category:'سريع', time:'25 دقيقة',
-    description:'عجة طرية تجمع البطاطس والبيض والجبنة في وجبة اقتصادية.',
-    ingredients:['بطاطس','بيض','جبنة','بصل','زيت','ملح','فلفل أسود'],
-    steps:[
-      'قشري البطاطس وقطعيها مكعبات صغيرة.',
-      'اسلقي البطاطس 6 إلى 8 دقائق ثم صفيها جيدًا.',
-      'اخفقي البيض مع الملح والفلفل وأضيفي الجبنة.',
-      'سخني الزيت وشوّحي البصل حتى يلين.',
-      'أضيفي البطاطس وحركيها حتى تأخذ لونًا خفيفًا.',
-      'اسكبي خليط البيض ووزعيه فوق البطاطس.',
-      'خففي النار جدًا وغطي الطاسة حتى يتماسك القاع ويبدأ الوجه في النضج.',
-      'اقسمي العجة أو اقلبيها بحذر إذا أصبحت متماسكة.',
-      'اطهيها دقيقة إضافية ثم قدميها دافئة.',
-    ],
-  ),
-  Recipe(
-    id:'6', title:'شكشوكة بالجبنة', category:'فطار', time:'20 دقيقة',
-    description:'شكشوكة بطابع بيتي مع طماطم وبصل وثوم ولمسة جبنة.',
-    ingredients:['بيض','طماطم','بصل','ثوم','جبنة','زيت','ملح','فلفل أسود'],
-    steps:[
-      'فرمي البصل والثوم وقطعي الطماطم قطعًا صغيرة.',
-      'سخني الزيت وشوّحي البصل حتى يصبح شفافًا.',
-      'أضيفي الثوم وقلبيه نصف دقيقة فقط.',
-      'أضيفي الطماطم والملح والفلفل واتركيها حتى تصبح صوصًا كثيفًا.',
-      'اعملي تجاويف صغيرة في الصوص بظهر الملعقة.',
-      'اكسري بيضة في كل تجويف وغطي الطاسة حتى يتماسك البياض.',
-      'وزعي الجبنة فوق البيض في آخر دقيقتين حتى تذوب جزئيًا.',
-      'تابعي التسوية حتى يصل البيض للقوام الذي تفضلينه.',
-      'قدميها ساخنة مباشرة.',
-    ],
-  ),
-  Recipe(
-    id:'7', title:'مكرونة بالبيض والجبنة', category:'سريع', time:'20 دقيقة',
-    description:'وجبة سريعة جدًا تعتمد على المكرونة والبيض والجبنة.',
-    ingredients:['مكرونة','بيض','جبنة','زبدة','فلفل أسود'],
-    steps:[
-      'اسلقي المكرونة حتى تصبح متماسكة واحتفظي بقليل من ماء السلق.',
-      'اخفقي البيض مع الجبنة والفلفل الأسود.',
-      'صفي المكرونة مع الاحتفاظ بنصف كوب من ماء السلق.',
-      'أعيدي المكرونة للطاسة مع الزبدة وقلبي دقيقة.',
-      'ارفعي الطاسة عن النار وأضيفي خليط البيض بسرعة مع التقليب.',
-      'أضيفي ماء السلق تدريجيًا حتى يصبح الخليط كريميًا.',
-      'أعيدي الطاسة لنار منخفضة جدًا لبضع ثوانٍ فقط عند الحاجة.',
-      'تذوقي واضبطي الملح ثم قدميها فورًا.',
-    ],
-  ),
-  Recipe(
-    id:'8', title:'صينية بطاطس بالجبنة', category:'عشاء', time:'35 دقيقة',
-    description:'بطاطس طرية بوجه جبنة ذائب مناسبة للعشاء.',
-    ingredients:['بطاطس','جبنة','لبن','زبدة','ثوم','ملح','فلفل أسود'],
-    steps:[
-      'سخني الفرن على 200 مئوية وادهني صينية صغيرة بالزبدة.',
-      'قشري البطاطس وقطعيها شرائح رفيعة ومتقاربة السمك.',
-      'رتبي نصف البطاطس ورشي قليلًا من الملح والفلفل.',
-      'وزعي جزءًا من الجبنة والثوم ثم أضيفي باقي البطاطس.',
-      'اسكبي اللبن بين الطبقات وأضيفي باقي الجبنة على الوجه.',
-      'وزعي قطعًا صغيرة من الزبدة وغطي الصينية.',
-      'اخبزيها حوالي 25 دقيقة حتى تبدأ البطاطس في الطراوة.',
-      'ارفعي الغطاء واتركيها 8 إلى 10 دقائق حتى يتحمر الوجه.',
-      'اختبري البطاطس بطرف سكين واتركيها 5 دقائق قبل التقديم.',
-    ],
-  ),
-  Recipe(
-    id:'9', title:'أرز بالدجاج والخضار', category:'غداء', time:'45 دقيقة',
-    description:'وجبة واحدة تجمع الدجاج والأرز والخضار في حلة واحدة.',
-    ingredients:['أرز','دجاج','بصل','جزر','بازلاء','طماطم','زيت','ملح','فلفل أسود'],
-    steps:[
-      'قطعي الدجاج إلى قطع متساوية وقطعي البصل والجزر والطماطم.',
-      'اغسلي الأرز وصفيه جيدًا.',
-      'سخني الزيت وحمري الدجاج على دفعات حتى يتغير لونه من الخارج.',
-      'أضيفي البصل ثم الجزر والبازلاء وقلبي حتى تلين.',
-      'أضيفي الطماطم وقلبي حتى تختلط عصارتها بالمكونات.',
-      'أعيدي الدجاج وأضيفي الأرز والملح والفلفل وقلبي دقيقة.',
-      'أضيفي الماء الساخن واتركي الخليط حتى يبدأ في الغليان.',
-      'خففي النار جدًا وغطي الحلة حتى ينضج الأرز والدجاج بالكامل.',
-      'أطفئي النار واتركيها 5 دقائق ثم فككي الأرز بالشوكة وقدميه.',
-    ],
-  ),
-  Recipe(
-    id:'10', title:'توست بالبيض والجبنة', category:'فطار', time:'10 دقائق',
-    description:'أسرع اختيار للفطار عند توفر البيض والجبنة والعيش.',
-    ingredients:['بيض','جبنة','عيش','طماطم','زبدة','فلفل أسود'],
-    steps:[
-      'اخفقي البيض مع الفلفل الأسود ورشة صغيرة من الملح.',
-      'سخني طاسة وادهنيها بقليل من الزبدة.',
-      'غمسي الخبز في خليط البيض من الجانبين بسرعة.',
-      'ضعي الخبز في الطاسة وحمريه من الجانبين.',
-      'ضعي الجبنة فوق الخبز الساخن واتركيها دقيقة حتى تبدأ في الذوبان.',
-      'أضيفي شرائح الطماطم حسب الرغبة.',
-      'أغلقي الساندويتش أو قدميه مفتوحًا وهو دافئ.',
-    ],
-  ),
-];
+
+List<Recipe> starterRecipes() => arabicRecipeSeedData.map((entry) => Recipe.fromJson(entry)).toList();
 
 void main() => runApp(const CozyMamaApp());
 
@@ -311,6 +240,8 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   int tab = 0;
   List<String> pantry = ['بطاطس','بيض','طماطم','بصل','أرز','دجاج','مكرونة','جبنة'];
   List<Recipe> recipes = starterRecipes();
+  Map<String, int> recipeUseCount = {};
+  List<String> recentRecipeIds = [];
 
   @override void initState() { super.initState(); load(); }
 
@@ -318,6 +249,8 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString('recipes');
     final ing = p.getStringList('pantry');
+    final rawHistory = p.getString('recipe_use_count');
+    final savedRecent = p.getStringList('recent_recipe_ids') ?? const <String>[];
     if (!mounted) return;
     setState(() {
       if (raw != null) {
@@ -332,6 +265,15 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
           ..addAll(savedById.values.where((r) => !seedIds.contains(r.id)));
       }
       if (ing != null) pantry = ing;
+      if (rawHistory != null) {
+        final decoded = jsonDecode(rawHistory);
+        if (decoded is Map) {
+          recipeUseCount = decoded.map(
+            (key, value) => MapEntry(key.toString(), value is num ? value.toInt() : 0),
+          );
+        }
+      }
+      recentRecipeIds = List<String>.from(savedRecent);
     });
   }
 
@@ -339,10 +281,20 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     final p = await SharedPreferences.getInstance();
     await p.setString('recipes', jsonEncode(recipes.map((e) => e.toJson()).toList()));
     await p.setStringList('pantry', pantry);
+    await p.setString('recipe_use_count', jsonEncode(recipeUseCount));
+    await p.setStringList('recent_recipe_ids', recentRecipeIds);
   }
 
+  List<SmartSuggestion> get smartSuggestions =>
+      SmartRecipeEngine.rank(
+        pantry,
+        recipes,
+        history: recipeUseCount,
+        recentRecipeIds: recentRecipeIds,
+      );
+
   List<Recipe> get suggestions =>
-      SmartRecipeEngine.rank(pantry, recipes).map((x) => x.recipe).toList();
+      smartSuggestions.map((x) => x.recipe).toList();
 
   @override Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner:false, title:'مطبخي الدافي',
@@ -363,7 +315,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   );
 
   Widget home() {
-    final picks = suggestions.take(3).toList();
+    final picks = smartSuggestions.take(3).toList();
     return ListView(padding:const EdgeInsets.fromLTRB(18,8,18,30),children:[
       Container(padding:const EdgeInsets.all(22),decoration:BoxDecoration(gradient:const LinearGradient(colors:[Color(0xFFFFE7D8),Color(0xFFF8D7D0)]),borderRadius:BorderRadius.circular(28)),child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text('أهلاً يا ماما',style:TextStyle(fontSize:25,fontWeight:FontWeight.w900,color:brown)),
@@ -371,7 +323,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       ])),
       const SizedBox(height:20), section('ماذا نطبخ اليوم؟','حسب المكونات اللي عندك'),
       const SizedBox(height:10),
-      if(picks.isEmpty) empty('ضيفي مكوناتك عشان أقدر أقترح لك وجبات.') else ...picks.map(recipeCard),
+      if(picks.isEmpty) empty('ضيفي مكوناتك عشان أقدر أقترح لك وجبات.') else ...picks.map(smartSuggestionCard),
       const SizedBox(height:12), section('وصفاتك','كل وصفات البيت في مكان واحد'),
       const SizedBox(height:10), ...recipes.take(2).map(recipeCard)
     ]);
@@ -381,11 +333,14 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   Widget suggestionsPage() => ListView(padding:const EdgeInsets.all(18),children:[
     Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:const Color(0xFFE7F0E5),borderRadius:BorderRadius.circular(24)),child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Icon(Icons.auto_awesome_rounded,color:sage,size:30),SizedBox(height:8),
-      Text('اقتراحات من مطبخك',style:TextStyle(fontSize:21,fontWeight:FontWeight.w900,color:brown)),
-      SizedBox(height:5),Text('التطبيق يقارن مكوناتك بالوصفات المحفوظة ويرتب لك الأقرب أولاً.',style:TextStyle(color:brown,height:1.4))
+      Text('اقتراحات ذكية من مطبخك',style:TextStyle(fontSize:21,fontWeight:FontWeight.w900,color:brown)),
+      SizedBox(height:5),Text('الترتيب بيتعلم من المفضلة والوصفات اللي طبختيها، وبيوضح لك المتوفر والناقص.',style:TextStyle(color:brown,height:1.4))
     ])),
-    const SizedBox(height:18),...suggestions.map(recipeCard),
-    if(suggestions.isEmpty) empty('لسه مفيش اقتراح مناسب. ضيفي مكونات أكتر أو احفظي وصفات جديدة.')
+    const SizedBox(height:18),
+    if(smartSuggestions.isEmpty)
+      empty('لسه مفيش اقتراح مناسب. ضيفي مكونات أكتر أو احفظي وصفات جديدة.')
+    else
+      ...smartSuggestions.map(smartSuggestionCard),
   ]);
   Widget favoritesPage() {
     final list = recipes.where((r)=>r.favorite).toList();
@@ -396,6 +351,82 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:21,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:3),Text(sub,style:TextStyle(color:brown.withValues(alpha: .65)))])),
     const Icon(Icons.restaurant_menu_rounded,color:rose)
   ]);
+
+  Widget smartSuggestionCard(SmartSuggestion suggestion) {
+    final r = suggestion.recipe;
+    final percent = (suggestion.coverage * 100).round();
+    final missingPreview = suggestion.missing.take(3).join('، ');
+    final missingText = suggestion.missing.isEmpty
+        ? 'المكونات الأساسية كلها موجودة'
+        : 'ناقص: ' + missingPreview + (suggestion.missing.length > 3 ? '…' : '');
+
+    return Card(
+      color: card,
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: () => details(r),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: peach.withValues(alpha: .25),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(Icons.restaurant_rounded, color: rose, size: 29),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(r.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: brown)),
+                      const SizedBox(height: 5),
+                      Text(r.category + ' • ' + r.time, style: TextStyle(color: brown.withValues(alpha: .65))),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: suggestion.score >= 75 ? const Color(0xFFE2F1E2) : const Color(0xFFFFEBDD),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(suggestion.score.toString() + '%', style: const TextStyle(color: brown, fontWeight: FontWeight.w900)),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              Text(suggestion.reason, style: const TextStyle(color: brown, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text('متوفر: ' + suggestion.matched.take(4).join('، '), style: TextStyle(color: brown.withValues(alpha: .78))),
+              const SizedBox(height: 3),
+              Text(missingText, style: TextStyle(color: suggestion.missing.isEmpty ? sage : brown.withValues(alpha: .65))),
+              const SizedBox(height: 6),
+              Text(percent.toString() + '% من المكونات المطلوبة موجودة', style: TextStyle(color: brown.withValues(alpha: .55), fontSize: 12)),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  onPressed: () => toggleFavorite(r),
+                  icon: Icon(
+                    r.favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    color: r.favorite ? rose : brown.withValues(alpha: .5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget recipeCard(Recipe r) => Card(color:card,elevation:0,margin:const EdgeInsets.only(bottom:12),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),child:InkWell(
     borderRadius:BorderRadius.circular(22),onTap:()=>details(r),child:Padding(padding:const EdgeInsets.all(16),child:Row(children:[
@@ -410,12 +441,33 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   Widget empty(String text) => Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:card,borderRadius:BorderRadius.circular(20)),child:Text(text,style:const TextStyle(color:brown,height:1.5)));
 
+  void markCooked(Recipe r) {
+    setState(() {
+      recipeUseCount[r.id] = (recipeUseCount[r.id] ?? 0) + 1;
+      recentRecipeIds = [r.id, ...recentRecipeIds.where((id) => id != r.id)].take(12).toList();
+    });
+    save();
+    ScaffoldMessenger.of(navigatorKey.currentState!.context).showSnackBar(
+      SnackBar(content: Text('اتسجلت ' + r.title + ' في تاريخ وصفاتك')),
+    );
+  }
+
   void toggleFavorite(Recipe r) { setState(()=>recipes=recipes.map((x)=>x.id==r.id?x.copyWith(favorite:!x.favorite):x).toList()); save(); }
 
   void details(Recipe r) => showModalBottomSheet(context:navigatorKey.currentState!.context,isScrollControlled:true,backgroundColor:cream,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:DraggableScrollableSheet(expand:false,initialChildSize:.72,builder:(_,c)=>ListView(controller:c,padding:const EdgeInsets.all(22),children:[
     Text(r.title,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:7),
     Text('${r.category} • ${r.time}',style:TextStyle(color:brown.withValues(alpha: .65))),const SizedBox(height:15),
-    Text(r.description,style:const TextStyle(color:brown,height:1.5)),const SizedBox(height:22),
+    Text(r.description,style:const TextStyle(color:brown,height:1.5)),
+    const SizedBox(height:12),
+    FilledButton.icon(
+      onPressed: () {
+        markCooked(r);
+        Navigator.pop(navigatorKey.currentState!.context);
+      },
+      icon: const Icon(Icons.check_circle_outline_rounded),
+      label: const Text('طبختها اليوم'),
+    ),
+    const SizedBox(height:18),
     const Text('المكونات',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800,color:brown)),const SizedBox(height:8),
     ...r.ingredients.map((x)=>ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.check_circle_rounded,color:sage),title:Text(x))),
     const SizedBox(height:10),const Text('الطريقة',style:TextStyle(fontSize:19,fontWeight:FontWeight.w800,color:brown)),const SizedBox(height:8),
@@ -449,7 +501,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
         Wrap(spacing:7,runSpacing:7,children:pantry.map((x)=>InputChip(label:Text(x),onDeleted:(){setState(()=>pantry.remove(x));sheet((){});save();})).toList()),
         const SizedBox(height:10),Row(children:[
           Expanded(child:TextField(controller:c,decoration:InputDecoration(hintText:'مثال: جزر',filled:true,fillColor:Colors.white70,border:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:BorderSide.none)))),
-          const SizedBox(width:8),IconButton.filled(onPressed:(){final x=c.text.trim();if(x.isNotEmpty&&!pantry.contains(x)){setState(()=>pantry.add(x));sheet((){});c.clear();save();}},icon:const Icon(Icons.add_rounded))
+          const SizedBox(width:8),IconButton.filled(onPressed:(){final x=c.text.trim();if(x.isNotEmpty&&!pantry.any((item)=>SmartRecipeEngine.normalize(item)==SmartRecipeEngine.normalize(x))){setState(()=>pantry.add(x));sheet((){});c.clear();save();}},icon:const Icon(Icons.add_rounded))
         ])
       ])
     ))));
