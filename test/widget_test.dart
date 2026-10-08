@@ -74,10 +74,8 @@ void main() {
     );
     expect(lastStepFinder, findsOneWidget);
   });
-}
 
-
-testWidgets('smart kitchen features are reachable', (tester) async {
+  testWidgets('smart kitchen features are reachable', (tester) async {
   await tester.pumpWidget(const CozyMamaApp());
   await tester.pumpAndSettle();
   await tester.tap(find.text('المطبخ الذكي'));
@@ -87,3 +85,5 @@ testWidgets('smart kitchen features are reachable', (tester) async {
   expect(find.text('وجبة كاملة'), findsOneWidget);
   expect(find.text('البدائل'), findsOneWidget);
 });
+
+}
