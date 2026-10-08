@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'recipe_seed_data.dart';
@@ -321,12 +322,13 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       appBar:AppBar(backgroundColor:cream,elevation:0,title:const Text('مطبخي الدافي',style:TextStyle(fontWeight:FontWeight.w900,color:brown)),actions:[
         IconButton(onPressed:showPantry,icon:const Icon(Icons.kitchen_rounded,color:brown))
       ]),
-      body:IndexedStack(index:tab,children:[home(), recipesPage(), suggestionsPage(), favoritesPage()]),
+      body:IndexedStack(index:tab,children:[home(), recipesPage(), suggestionsPage(), favoritesPage(), smartKitchenPage()]),
       bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),backgroundColor:card,indicatorColor:peach.withValues(alpha: .35),destinations:const[
         NavigationDestination(icon:Icon(Icons.home_rounded),label:'الرئيسية'),
         NavigationDestination(icon:Icon(Icons.menu_book_rounded),label:'وصفاتي'),
         NavigationDestination(icon:Icon(Icons.auto_awesome_rounded),label:'اقترحي لي'),
-        NavigationDestination(icon:Icon(Icons.favorite_rounded),label:'المفضلة')
+        NavigationDestination(icon:Icon(Icons.favorite_rounded),label:'المفضلة'),
+        NavigationDestination(icon:Icon(Icons.auto_awesome_motion_rounded),label:'المطبخ الذكي')
       ]),
       floatingActionButton:tab == 1 ? FloatingActionButton.extended(backgroundColor:rose,foregroundColor:Colors.white,onPressed:addRecipe,icon:const Icon(Icons.add_rounded),label:const Text('وصفة جديدة')) : null
     ))
@@ -387,6 +389,24 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       },
     );
   }
+  Widget smartKitchenPage() => SmartKitchenPage(
+    recipes: recipes,
+    pantry: pantry,
+    history: recipeUseCount,
+    recentRecipeIds: recentRecipeIds,
+    onPantryChanged: (items) {
+      setState(() => pantry = List<String>.from(items));
+      save();
+    },
+    onCooked: (recipe) {
+      setState(() {
+        recipeUseCount[recipe.id] = (recipeUseCount[recipe.id] ?? 0) + 1;
+        recentRecipeIds = [recipe.id, ...recentRecipeIds.where((id) => id != recipe.id)].take(12).toList();
+      });
+      save();
+    },
+  );
+
   Widget favoritesPage() {
     final list = recipes.where((r)=>r.favorite).toList();
     return ListView(padding:const EdgeInsets.all(18),children:[section('المفضلة','الوصفات اللي بتحبي ترجعي لها'),const SizedBox(height:12),...list.map(recipeCard),if(list.isEmpty) empty('اضغطي على القلب جنب أي وصفة عشان تلاقيها هنا بسرعة.')]);
@@ -551,4 +571,885 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       ])
     ))));
   }
+}
+
+
+class SmartKitchenPage extends StatefulWidget {
+  final List<Recipe> recipes;
+  final List<String> pantry;
+  final Map<String, int> history;
+  final List<String> recentRecipeIds;
+  final ValueChanged<List<String>> onPantryChanged;
+  final ValueChanged<Recipe> onCooked;
+
+  const SmartKitchenPage({
+    super.key,
+    required this.recipes,
+    required this.pantry,
+    required this.history,
+    required this.recentRecipeIds,
+    required this.onPantryChanged,
+    required this.onCooked,
+  });
+
+  @override
+  State<SmartKitchenPage> createState() => _SmartKitchenPageState();
+}
+
+class _SmartKitchenPageState extends State<SmartKitchenPage> {
+  final queryController = TextEditingController();
+  String query = '';
+  String country = 'الكل';
+  String category = 'الكل';
+  String difficulty = 'الكل';
+  int? maxMinutes;
+  List<String> pantry = [];
+  Map<String, int> expiry = <String, int>{};
+  List<String> shopping = [];
+  Map<String, String> notes = <String, String>{};
+  Map<String, int> ratings = <String, int>{};
+  bool excludeRecent = false;
+
+  @override
+  void initState() {
+    super.initState();
+    pantry = List<String>.from(widget.pantry);
+    _loadSmartData();
+  }
+
+  @override
+  void dispose() {
+    queryController.dispose();
+    super.dispose();
+  }
+
+  int _minutes(Recipe recipe) {
+    final match = RegExp(r'(\d+)').firstMatch(recipe.time);
+    return int.tryParse(match?.group(1) ?? '') ?? 45;
+  }
+
+  String _difficulty(Recipe recipe) {
+    final complexity = recipe.ingredients.length + recipe.steps.length + (_minutes(recipe) ~/ 30);
+    if (_minutes(recipe) <= 30 && complexity <= 9) return 'سهل';
+    if (_minutes(recipe) <= 70 && complexity <= 15) return 'متوسط';
+    return 'متقدم';
+  }
+
+  String _season() {
+    final month = DateTime.now().month;
+    if (month >= 3 && month <= 5) return 'الربيع';
+    if (month >= 6 && month <= 8) return 'الصيف';
+    if (month >= 9 && month <= 11) return 'الخريف';
+    return 'الشتاء';
+  }
+
+  List<String> _understandIngredients(String value) {
+    final text = value.toLowerCase();
+    const aliases = <String, String>{
+      'بيض': 'بيض', 'بيضة': 'بيض', 'بيضه': 'بيض', 'egg': 'بيض', 'eggs': 'بيض',
+      'جبنة': 'جبن', 'جبنه': 'جبن', 'cheese': 'جبن',
+      'لبن': 'لبن', 'حليب': 'لبن', 'milk': 'لبن',
+      'فراخ': 'دجاج', 'دجاج': 'دجاج', 'chicken': 'دجاج',
+      'لحمة': 'لحم', 'لحمه': 'لحم', 'beef': 'لحم', 'meat': 'لحم',
+      'رز': 'ارز', 'أرز': 'ارز', 'rice': 'ارز',
+      'مكرونة': 'مكرونه', 'مكرونه': 'مكرونه', 'pasta': 'مكرونه',
+      'بطاطس': 'بطاطس', 'بطاطا': 'بطاطس', 'potato': 'بطاطس',
+      'طماطم': 'طماطم', 'طماطه': 'طماطم', 'tomato': 'طماطم',
+      'بصل': 'بصل', 'onion': 'بصل',
+      'فاصوليا': 'فاصوليا', 'لوبيا': 'فاصوليا', 'beans': 'فاصوليا',
+      'فاصوليا بيضاء': 'فاصوليا', 'فاصوليا خضراء': 'فاصوليا',
+      'حمص': 'حمص', 'chickpeas': 'حمص',
+      'فول': 'فول', 'fava beans': 'فول',
+      'عدس': 'عدس', 'lentils': 'عدس',
+      'بامية': 'بامية', 'okra': 'بامية',
+      'باذنجان': 'باذنجان', 'eggplant': 'باذنجان',
+      'كوسة': 'كوسه', 'كوسا': 'كوسه', 'zucchini': 'كوسه',
+      'قرنبيط': 'قرنبيط', 'cauliflower': 'قرنبيط',
+      'جمبري': 'جمبري', 'روبيان': 'جمبري', 'قريدس': 'جمبري', 'shrimp': 'جمبري',
+      'سمك': 'سمك', 'fish': 'سمك',
+      'زبادي': 'زبادي', 'لبن رايب': 'زبادي', 'yogurt': 'زبادي',
+      'طحينة': 'طحينه', 'tahini': 'طحينه',
+      'خبز': 'خبز', 'عيش': 'خبز', 'bread': 'خبز',
+      'ليمون': 'ليمون', 'lemon': 'ليمون',
+      'ثوم': 'ثوم', 'garlic': 'ثوم',
+      'جزر': 'جزر', 'carrot': 'جزر',
+      'بقدونس': 'بقدونس', 'parsley': 'بقدونس',
+      'نعناع': 'نعناع', 'mint': 'نعناع',
+    };
+    final result = <String>[];
+    aliases.forEach((key, value) {
+      if (text.contains(key) && !result.contains(value)) result.add(value);
+    });
+
+    final cleaned = value.replaceAll(
+      RegExp(r'(عندي|عندى|موجود عندي|متوفر عندي|عندي بس)'),
+      ',',
+    );
+    for (final item in parseIngredients(cleaned)) {
+      final normalized = SmartRecipeEngine.normalize(item);
+      if (normalized.length >= 2 && !result.contains(normalized)) {
+        result.add(normalized);
+      }
+    }
+    return result;
+  }
+
+  Future<void> _loadSmartData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rawExpiry = prefs.getString('smart_expiry');
+    final rawNotes = prefs.getString('smart_notes');
+    final rawRatings = prefs.getString('smart_ratings');
+    if (!mounted) return;
+    setState(() {
+      final savedShopping = prefs.getStringList('smart_shopping');
+      if (savedShopping != null) shopping = savedShopping;
+      if (rawExpiry != null) {
+        final decoded = jsonDecode(rawExpiry);
+        if (decoded is Map) {
+          expiry = decoded.map(
+            (k, v) => MapEntry(k.toString(), (v as num).toInt()),
+          );
+        }
+      }
+      if (rawNotes != null) {
+        final decoded = jsonDecode(rawNotes);
+        if (decoded is Map) {
+          notes = decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
+        }
+      }
+      if (rawRatings != null) {
+        final decoded = jsonDecode(rawRatings);
+        if (decoded is Map) {
+          ratings = decoded.map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
+        }
+      }
+    });
+  }
+
+  Future<void> _saveSmartData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('smart_expiry', jsonEncode(expiry));
+    await prefs.setStringList('smart_shopping', shopping);
+    await prefs.setString('smart_notes', jsonEncode(notes));
+    await prefs.setString('smart_ratings', jsonEncode(ratings));
+  }
+
+  void _setPantry(List<String> values) {
+    final clean = <String>[];
+    for (final value in values.map((x) => x.trim()).where((x) => x.isNotEmpty)) {
+      final normalized = SmartRecipeEngine.normalize(value);
+      if (!clean.any((x) => SmartRecipeEngine.normalize(x) == normalized)) {
+        clean.add(value);
+      }
+    }
+    pantry = clean;
+    widget.onPantryChanged(clean);
+    setState(() {});
+    _saveSmartData();
+  }
+
+  List<Recipe> _filtered() {
+    final q = SmartRecipeEngine.normalize(query);
+    final tokens = q.split(' ').where((x) => x.isNotEmpty).toList();
+    final interpreted = _understandIngredients(query);
+
+    return widget.recipes.where((recipe) {
+      if (country != 'الكل' && recipe.country != country) return false;
+      if (category != 'الكل' && recipe.category != category) return false;
+      if (difficulty != 'الكل' && _difficulty(recipe) != difficulty) return false;
+      if (maxMinutes != null && _minutes(recipe) > maxMinutes!) return false;
+      if (excludeRecent && widget.recentRecipeIds.contains(recipe.id)) return false;
+      if (tokens.isEmpty || interpreted.isNotEmpty) return true;
+
+      final haystack = [
+        recipe.title,
+        recipe.country,
+        recipe.category,
+        ...recipe.ingredients,
+      ].map(SmartRecipeEngine.normalize).join(' ');
+      return tokens.every(haystack.contains);
+    }).toList();
+  }
+
+  List<SmartSuggestion> _ranked() {
+    final candidates = _filtered();
+    final interpreted = _understandIngredients(query);
+    final available = interpreted.isNotEmpty ? interpreted : pantry;
+
+    if (available.isEmpty) {
+      return candidates.take(60).map((recipe) => SmartSuggestion(
+        recipe: recipe,
+        matched: const [],
+        missing: recipe.ingredients,
+        score: widget.recentRecipeIds.contains(recipe.id) ? 75 : 90,
+        coverage: 0,
+        reason: 'اختيار اكتشاف من الكتالوج بدون مكوّنات محددة',
+      )).toList();
+    }
+
+    return SmartRecipeEngine.rank(
+      available,
+      candidates,
+      history: widget.history,
+      recentRecipeIds: widget.recentRecipeIds,
+    ).take(60).toList();
+  }
+
+  List<String> _seasonKeywords() {
+    switch (_season()) {
+      case 'الربيع':
+        return ['فول', 'حمص', 'سلطة', 'ليمون'];
+      case 'الصيف':
+        return ['طماطم', 'باذنجان', 'كوسه', 'سلطة'];
+      case 'الخريف':
+        return ['قرع', 'عدس', 'شوربة', 'تمر'];
+      default:
+        return ['شوربة', 'عدس', 'طاجن', 'قرفة'];
+    }
+  }
+
+  List<Recipe> _seasonal() {
+    final keys = _seasonKeywords().map(SmartRecipeEngine.normalize).toList();
+    return widget.recipes.where((recipe) {
+      if (widget.recentRecipeIds.contains(recipe.id)) return false;
+      final hay = [
+        recipe.title,
+        recipe.category,
+        ...recipe.ingredients,
+      ].map(SmartRecipeEngine.normalize).join(' ');
+      return keys.any(hay.contains);
+    }).take(12).toList();
+  }
+
+  Recipe? _categoryRecipe(String contains, {String? avoid}) {
+    for (final recipe in widget.recipes) {
+      if (avoid != null && recipe.id == avoid) continue;
+      if (SmartRecipeEngine.normalize(recipe.category).contains(contains)) {
+        return recipe;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _addShopping(Iterable<String> missing) async {
+    for (final item in missing) {
+      final normalized = SmartRecipeEngine.normalize(item);
+      if (!shopping.any((x) => SmartRecipeEngine.normalize(x) == normalized)) {
+        shopping.add(item);
+      }
+    }
+    await _saveSmartData();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _addPantry() async {
+    final controller = TextEditingController();
+    DateTime? selectedDate;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('إضافة مكوّن للمخزن'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'المكوّن'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 730)),
+                  initialDate: DateTime.now().add(const Duration(days: 7)),
+                );
+                if (picked != null) setDialogState(() => selectedDate = picked);
+              },
+              icon: const Icon(Icons.event_rounded),
+              label: Text(
+                selectedDate == null
+                    ? 'تاريخ الانتهاء اختياري'
+                    : 'الانتهاء ' + selectedDate!.day.toString() + '/' + selectedDate!.month.toString(),
+              ),
+            ),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (value.isEmpty) return;
+                if (selectedDate != null) {
+                  expiry[SmartRecipeEngine.normalize(value)] =
+                      selectedDate!.millisecondsSinceEpoch;
+                }
+                _setPantry([...pantry, value]);
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('إضافة'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    controller.dispose();
+  }
+
+  List<String> _expiringSoon() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return pantry.where((item) {
+      final end = expiry[SmartRecipeEngine.normalize(item)];
+      return end != null &&
+          end! >= now &&
+          end! - now <= const Duration(days: 3).inMilliseconds;
+    }).toList();
+  }
+
+  void _substitutions() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => const AlertDialog(
+        title: Text('بدائل شائعة'),
+        content: SingleChildScrollView(
+          child: Text(
+            'زبادي ← لبن رايب أو لبنة مخففة\n'
+            'زبد ← سمن أو زيت نباتي\n'
+            'ليمون ← خل خفيف بكمية أقل\n'
+            'سكر ← عسل أو تمر مهروس حسب الوصفة\n'
+            'جبن ← لبنة أو جبن قريب في الرطوبة والملوحة\n'
+            'زيت زيتون ← زيت نباتي عند الحاجة',
+            style: TextStyle(height: 1.6),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _scaledIngredient(String value, int servings) {
+    if (servings == 4) return value;
+    final match = RegExp(r'^(\d+(?:[.,]\d+)?)\s+(.+)$').firstMatch(value.trim());
+    if (match == null) return value;
+
+    final original = double.tryParse(match.group(1)!.replaceAll(',', '.'));
+    if (original == null) return value;
+
+    final scaled = original * servings / 4;
+    final shown = scaled == scaled.roundToDouble()
+        ? scaled.toInt().toString()
+        : scaled.toStringAsFixed(1);
+    return shown + ' ' + match.group(2)!;
+  }
+
+  Future<void> _recipeDetails(Recipe recipe) async {
+    int servings = 4;
+    final note = TextEditingController(text: notes[recipe.id] ?? '');
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cream,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (_, setSheetState) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: .82,
+          maxChildSize: .96,
+          builder: (_, scrollController) => ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
+            children: [
+              Text(
+                recipe.title,
+                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: brown),
+              ),
+              const SizedBox(height: 5),
+              Text(recipe.country + ' • ' + recipe.category + ' • ' + recipe.time + ' • ' + _difficulty(recipe)),
+              const SizedBox(height: 12),
+              Text(recipe.description, style: const TextStyle(height: 1.5)),
+              const SizedBox(height: 12),
+              Row(children: [
+                const Text('لـ', style: TextStyle(fontWeight: FontWeight.w800)),
+                IconButton(
+                  onPressed: servings > 1 ? () => setSheetState(() => servings--) : null,
+                  icon: const Icon(Icons.remove_circle_outline_rounded),
+                ),
+                Text(servings.toString(), style: const TextStyle(fontWeight: FontWeight.w900)),
+                IconButton(
+                  onPressed: () => setSheetState(() => servings++),
+                  icon: const Icon(Icons.add_circle_outline_rounded),
+                ),
+                const Text('أفراد'),
+              ]),
+              const Text('المكونات', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: brown)),
+              ...recipe.ingredients.map((item) => ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.check_circle_outline_rounded, color: sage),
+                title: Text(_scaledIngredient(item, servings)),
+              )),
+              Wrap(spacing: 7, runSpacing: 7, children: [
+                FilledButton.icon(
+                  onPressed: () {
+                    widget.onCooked(recipe);
+                    Navigator.pop(sheetContext);
+                  },
+                  icon: const Icon(Icons.check_circle_outline_rounded),
+                  label: const Text('طبختها'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _addShopping(
+                    recipe.ingredients.where(
+                      (item) => !pantry.any(
+                        (p) => SmartRecipeEngine.normalize(p) ==
+                            SmartRecipeEngine.normalize(item),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add_shopping_cart_rounded),
+                  label: const Text('أضف الناقص'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(sheetContext);
+                    _cookMode(recipe);
+                  },
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('وضع الطبخ'),
+                ),
+              ]),
+              const SizedBox(height: 14),
+              const Text('الطريقة', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: brown)),
+              ...recipe.steps.asMap().entries.map((entry) => Card(
+                child: ListTile(
+                  leading: CircleAvatar(child: Text((entry.key + 1).toString())),
+                  title: Text(entry.value, style: const TextStyle(height: 1.45)),
+                ),
+              )),
+              const SizedBox(height: 10),
+              const Text('ملاحظتي', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: brown)),
+              TextField(
+                controller: note,
+                maxLines: 3,
+                decoration: const InputDecoration(hintText: 'اكتبي ملاحظة للمرة الجاية…'),
+                onChanged: (value) => notes[recipe.id] = value,
+                onEditingComplete: _saveSmartData,
+              ),
+              Row(
+                children: [
+                  const Text('تقييمي:'),
+                  for (var i = 1; i <= 5; i++)
+                    IconButton(
+                      onPressed: () async {
+                        ratings[recipe.id] = i;
+                        await _saveSmartData();
+                        if (mounted) setSheetState(() {});
+                      },
+                      icon: Icon(
+                        i <= (ratings[recipe.id] ?? 0)
+                            ? Icons.star_rounded
+                            : Icons.star_border_rounded,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    note.dispose();
+  }
+
+  Future<void> _cookMode(Recipe recipe) async {
+    int step = 0;
+    int seconds = 0;
+    bool closed = false;
+    Timer? timer;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: cream,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (_, setSheetState) => Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 28),
+          child: SafeArea(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Text('وضع الطبخ', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 7),
+              Text('الخطوة ' + (step + 1).toString() + ' من ' + recipe.steps.length.toString()),
+              const SizedBox(height: 12),
+              Text(
+                recipe.steps[step],
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 20, height: 1.5, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              if (seconds > 0)
+                Text(
+                  (seconds ~/ 60).toString() + ':' + (seconds % 60).toString().padLeft(2, '0'),
+                  style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
+                ),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                alignment: WrapAlignment.center,
+                children: [
+                  for (final minutes in [1, 5, 10, 20])
+                    OutlinedButton(
+                      onPressed: () {
+                        timer?.cancel();
+                        setSheetState(() => seconds = minutes * 60);
+                        timer = Timer.periodic(const Duration(seconds: 1), (_) {
+                          if (closed) return;
+                          if (seconds <= 1) {
+                            timer?.cancel();
+                            setSheetState(() => seconds = 0);
+                          } else {
+                            setSheetState(() => seconds--);
+                          }
+                        });
+                      },
+                      child: Text(minutes.toString() + ' د'),
+                    ),
+                  FilledButton(
+                    onPressed: () {
+                      if (step + 1 < recipe.steps.length) {
+                        setSheetState(() => step++);
+                      } else {
+                        widget.onCooked(recipe);
+                        closed = true;
+                        timer?.cancel();
+                        Navigator.pop(sheetContext);
+                      }
+                    },
+                    child: Text(step + 1 < recipe.steps.length ? 'التالي' : 'تم'),
+                  ),
+                ],
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+
+    closed = true;
+    timer?.cancel();
+  }
+
+  void _mealBuilder() {
+    final ranked = _ranked();
+    Recipe? main = ranked.isNotEmpty
+        ? ranked.first.recipe
+        : (widget.recipes.isEmpty ? null : widget.recipes.first);
+
+    final side = _categoryRecipe('جانب', avoid: main?.id) ??
+        _categoryRecipe('مقبل', avoid: main?.id);
+    final salad = _categoryRecipe('سلط', avoid: main?.id);
+    final drink = _categoryRecipe('مشروب', avoid: main?.id);
+    final dessert = _categoryRecipe('حلو', avoid: main?.id);
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: cream,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('وجبة كاملة', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          _mealLine('الطبق الرئيسي', main),
+          _mealLine('جانبي / مقبل', side),
+          _mealLine('سلطة', salad),
+          _mealLine('مشروب', drink),
+          _mealLine('حلو', dessert),
+        ]),
+      ),
+    );
+  }
+
+  Widget _mealLine(String label, Recipe? recipe) => ListTile(
+    contentPadding: EdgeInsets.zero,
+    leading: Icon(recipe == null ? Icons.remove_circle_outline_rounded : Icons.restaurant_rounded),
+    title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+    subtitle: Text(recipe?.title ?? 'لا يوجد تطابق'),
+    trailing: recipe == null ? null : Text(_minutes(recipe).toString() + ' د'),
+  );
+
+  Widget _suggestionCard(SmartSuggestion item) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: () => _recipeDetails(item.recipe),
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const CircleAvatar(child: Icon(Icons.restaurant_rounded)),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  item.recipe.title,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                ),
+              ),
+              Text(item.score.toString() + '%', style: const TextStyle(fontWeight: FontWeight.w900)),
+            ]),
+            const SizedBox(height: 7),
+            Text(item.reason),
+            if (item.matched.isNotEmpty) Text('موجود: ' + item.matched.take(5).join('، ')),
+            if (item.missing.isNotEmpty) Text('ناقص: ' + item.missing.take(5).join('، ')),
+            Wrap(spacing: 4, runSpacing: 4, children: [
+              Chip(label: Text(item.recipe.country)),
+              Chip(label: Text(item.recipe.category)),
+              Chip(label: Text(item.recipe.time)),
+              Chip(label: Text(_difficulty(item.recipe))),
+            ]),
+            if (item.missing.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _addShopping(item.missing),
+                  icon: const Icon(Icons.add_shopping_cart_rounded),
+                  label: const Text('أضف الناقص'),
+                ),
+              ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _cookMode(item.recipe),
+                icon: const Icon(Icons.play_circle_outline_rounded),
+                label: const Text('ابدئي الطبخ'),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _pantryCard() {
+    final expiring = _expiringSoon();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Expanded(
+              child: Text('مخزن البيت', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+            ),
+            IconButton(onPressed: _addPantry, icon: const Icon(Icons.add_circle_rounded)),
+          ]),
+          Text(pantry.length.toString() + ' مكوّن محفوظ Offline'),
+          if (expiring.isNotEmpty)
+            Text('قريب من الانتهاء: ' + expiring.join('، '), style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 5,
+            runSpacing: 5,
+            children: pantry.map((item) => InputChip(
+              label: Text(item),
+              onDeleted: () => _setPantry([...pantry]..remove(item)),
+            )).toList(),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _shoppingCard() => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Expanded(
+            child: Text('قائمة التسوق', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+          ),
+          IconButton(
+            onPressed: shopping.isEmpty
+                ? null
+                : () async {
+                    shopping.clear();
+                    await _saveSmartData();
+                    if (mounted) setState(() {});
+                  },
+            icon: const Icon(Icons.delete_sweep_rounded),
+          ),
+        ]),
+        if (shopping.isEmpty)
+          const Text('المكونات الناقصة من الوصفات تتجمع هنا.')
+        else
+          ...shopping.map((item) => CheckboxListTile(
+            dense: true,
+            value: false,
+            onChanged: (_) async {
+              shopping.remove(item);
+              await _saveSmartData();
+              if (mounted) setState(() {});
+            },
+            title: Text(item),
+          )),
+      ]),
+    ),
+  );
+
+  Widget _filters() {
+    final countries = <String>{'الكل', ...widget.recipes.map((r) => r.country)}.toList()..sort();
+    final categories = <String>{'الكل', ...widget.recipes.map((r) => r.category)}.toList()..sort();
+
+    return Wrap(spacing: 6, runSpacing: 6, children: [
+      DropdownButton<String>(
+        value: countries.contains(country) ? country : 'الكل',
+        items: countries.map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(),
+        onChanged: (v) => setState(() => country = v ?? 'الكل'),
+      ),
+      DropdownButton<String>(
+        value: categories.contains(category) ? category : 'الكل',
+        items: categories.map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(),
+        onChanged: (v) => setState(() => category = v ?? 'الكل'),
+      ),
+      DropdownButton<String>(
+        value: difficulty,
+        items: const [
+          DropdownMenuItem(value: 'الكل', child: Text('كل المستويات')),
+          DropdownMenuItem(value: 'سهل', child: Text('سهل')),
+          DropdownMenuItem(value: 'متوسط', child: Text('متوسط')),
+          DropdownMenuItem(value: 'متقدم', child: Text('متقدم')),
+        ],
+        onChanged: (v) => setState(() => difficulty = v ?? 'الكل'),
+      ),
+      DropdownButton<int?>(
+        value: maxMinutes,
+        items: const [
+          DropdownMenuItem<int?>(value: null, child: Text('أي وقت')),
+          DropdownMenuItem<int?>(value: 15, child: Text('حتى 15 د')),
+          DropdownMenuItem<int?>(value: 30, child: Text('حتى 30 د')),
+          DropdownMenuItem<int?>(value: 60, child: Text('حتى ساعة')),
+          DropdownMenuItem<int?>(value: 120, child: Text('حتى ساعتين')),
+        ],
+        onChanged: (v) => setState(() => maxMinutes = v),
+      ),
+    ]);
+  }
+
+  Widget _dashboard() {
+    final ranked = _ranked();
+    final interpreted = _understandIngredients(query);
+    final seasonal = _seasonal();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+      children: [
+        const Text('المطبخ الذكي', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 5),
+        Text('اكتبي المكونات أو جملة كاملة. الموسم الحالي: ' + _season()),
+        const SizedBox(height: 12),
+        TextField(
+          controller: queryController,
+          onChanged: (value) => setState(() => query = value),
+          minLines: 1,
+          maxLines: 3,
+          decoration: InputDecoration(
+            hintText: 'مثال: عندي فراخ ورز وبصل وعايز حاجة في نص ساعة',
+            prefixIcon: const Icon(Icons.auto_awesome_rounded),
+            suffixIcon: query.isEmpty
+                ? null
+                : IconButton(
+                    onPressed: () {
+                      queryController.clear();
+                      setState(() => query = '');
+                    },
+                    icon: const Icon(Icons.clear_rounded),
+                  ),
+            filled: true,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+          ),
+        ),
+        if (interpreted.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 7),
+            child: Text(
+              'فهمت: ' + interpreted.join('، '),
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        const SizedBox(height: 7),
+        _filters(),
+        const SizedBox(height: 5),
+        Row(children: [
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: _mealBuilder,
+              icon: const Icon(Icons.dinner_dining_rounded),
+              label: const Text('وجبة كاملة'),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _substitutions,
+              icon: const Icon(Icons.swap_horiz_rounded),
+              label: const Text('البدائل'),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 9),
+        _pantryCard(),
+        const SizedBox(height: 10),
+        Row(children: [
+          const Expanded(
+            child: Text('أفضل النتائج', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+          ),
+          TextButton(
+            onPressed: () => setState(() => excludeRecent = !excludeRecent),
+            child: Text(excludeRecent ? 'أظهر المتكرر' : 'قلل التكرار'),
+          ),
+        ]),
+        if (ranked.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('مفيش تطابق كفاية. زوّدي مكوّن أو اكتبي اسم مكوّن واحد زي فاصوليا.'),
+            ),
+          )
+        else
+          ...ranked.take(8).map(_suggestionCard),
+        const SizedBox(height: 8),
+        const Text('اقتراحات الموسم', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        ...seasonal.take(4).map((recipe) => _suggestionCard(SmartSuggestion(
+          recipe: recipe,
+          matched: const [],
+          missing: const [],
+          score: 88,
+          coverage: 0,
+          reason: 'اختيار موسمي مع تقليل التكرار',
+        ))),
+        const SizedBox(height: 8),
+        const Text('اكتشفي الجديد', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+        ...widget.recipes.where((r) => !widget.recentRecipeIds.contains(r.id) && !r.favorite).take(4).map(
+          (recipe) => _suggestionCard(SmartSuggestion(
+            recipe: recipe,
+            matched: const [],
+            missing: const [],
+            score: 90,
+            coverage: 0,
+            reason: 'وصفة جديدة عليك',
+          )),
+        ),
+        const SizedBox(height: 8),
+        _shoppingCard(),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Directionality(
+    textDirection: TextDirection.rtl,
+    child: _dashboard(),
+  );
 }
