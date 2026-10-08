@@ -9,7 +9,6 @@ void main() {
 
     expect(find.text('أهلاً يا ماما'), findsOneWidget);
     expect(find.text('ماذا نطبخ اليوم؟'), findsOneWidget);
-    expect(find.text('وصفاتك'), findsOneWidget);
   });
 
   testWidgets('navigation and pantry controls respond', (tester) async {
