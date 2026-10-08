@@ -149,15 +149,15 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   Future<void> addRecipe() async {
     final title=TextEditingController(), ingredients=TextEditingController(), steps=TextEditingController(), time=TextEditingController();
-    await showDialog(context:navigatorKey.currentState!.context,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
+    await showDialog(context:navigatorKey.currentState!.context,builder:(dialogContext)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
       backgroundColor:cream,title:const Text('وصفة جديدة',style:TextStyle(color:brown,fontWeight:FontWeight.w900)),
       content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
         field(title,'اسم الوصفة'),field(ingredients,'المكونات — افصلي بينها بفاصلة'),field(steps,'الطريقة — كل خطوة في سطر'),field(time,'الوقت، مثال: 30 دقيقة')
       ])),
-      actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('إلغاء')),FilledButton(onPressed:(){
+      actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('إلغاء')),FilledButton(onPressed:(){
         if(title.text.trim().isEmpty)return;
         final r=Recipe(id:DateTime.now().microsecondsSinceEpoch.toString(),title:title.text.trim(),category:'بيتي',time:time.text.trim().isEmpty?'غير محدد':time.text.trim(),description:'وصفة من مطبخك.',ingredients:ingredients.text.split(',').map((x)=>x.trim()).where((x)=>x.isNotEmpty).toList(),steps:steps.text.split('\\n').map((x)=>x.trim()).where((x)=>x.isNotEmpty).toList());
-        setState(()=>recipes.insert(0,r));save();Navigator.pop(context);
+        setState(()=>recipes.insert(0,r));save();Navigator.pop(dialogContext);
       },child:const Text('حفظ'))]
     )));
   }
