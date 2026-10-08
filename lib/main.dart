@@ -13,17 +13,17 @@ const sage = Color(0xFF8BAA8B);
 const card = Color(0xFFFFFCF7);
 
 class Recipe {
-  final String id, title, category, time, description, country;
+  final String id, title, category, time, description, country, imageUrl;
   final List<String> ingredients, steps;
   final bool favorite;
-  const Recipe({required this.id, required this.title, required this.category, required this.time, required this.description, required this.ingredients, required this.steps, this.country = 'العالم العربي', this.favorite = false});
-  Recipe copyWith({bool? favorite, String? country}) => Recipe(id:id,title:title,category:category,time:time,description:description,ingredients:ingredients,steps:steps,country:country ?? this.country,favorite:favorite ?? this.favorite);
-  Map<String,dynamic> toJson() => {'id':id,'title':title,'category':category,'time':time,'description':description,'country':country,'ingredients':ingredients,'steps':steps,'favorite':favorite};
+  const Recipe({required this.id, required this.title, required this.category, required this.time, required this.description, required this.ingredients, required this.steps, this.country = 'العالم العربي', this.favorite = false, this.imageUrl = ''});
+  Recipe copyWith({bool? favorite, String? country, String? imageUrl}) => Recipe(id:id,title:title,category:category,time:time,description:description,ingredients:ingredients,steps:steps,country:country ?? this.country,favorite:favorite ?? this.favorite,imageUrl:imageUrl ?? this.imageUrl);
+  Map<String,dynamic> toJson() => {'id':id,'title':title,'category':category,'time':time,'description':description,'country':country,'ingredients':ingredients,'steps':steps,'favorite':favorite,'imageUrl':imageUrl};
   factory Recipe.fromJson(Map<String,dynamic> j) => Recipe(
     id:j['id'] ?? DateTime.now().microsecondsSinceEpoch.toString(),
     title:j['title'] ?? '', category:j['category'] ?? 'بيتي', time:j['time'] ?? '',
     description:j['description'] ?? '', country:j['country'] ?? 'العالم العربي', ingredients:List<String>.from(j['ingredients'] ?? []),
-    steps:List<String>.from(j['steps'] ?? []), favorite:j['favorite'] ?? false);
+    steps:List<String>.from(j['steps'] ?? []), favorite:j['favorite'] ?? false, imageUrl:j['imageUrl'] ?? '');
 }
 
 
@@ -200,6 +200,250 @@ class SmartRecipeEngine {
   }
 }
 
+class CookingConversion {
+  static Map<String, dynamic> convert({
+    required String from,
+    required String to,
+    required int temperatureC,
+    required int minutes,
+  }) {
+    var temp = temperatureC.toDouble();
+    var time = minutes.toDouble();
+    if (from == to) {
+    } else if (from == 'فرن عادي' && to == 'فرن بمروحة') {
+      temp -= 15;
+      time *= .9;
+    } else if (from == 'فرن بمروحة' && to == 'فرن عادي') {
+      temp += 15;
+      time *= 1.1;
+    } else if ((from == 'فرن عادي' || from == 'فرن بمروحة') && to == 'قلاية هوائية') {
+      temp -= 20;
+      time *= .8;
+    } else if (from == 'قلاية هوائية' && (to == 'فرن عادي' || to == 'فرن بمروحة')) {
+      temp += 20;
+      time *= 1.25;
+    }
+    return {
+      'temperatureC': temp.round().clamp(80, 260),
+      'minutes': time.ceil().clamp(1, 240),
+    };
+  }
+}
+
+class RecipeDiagnostics {
+  final List<Recipe> recipes;
+  final int repairedCount;
+  final int duplicateIngredientsRemoved;
+  final int duplicateStepsRemoved;
+  final List<String> manualIssues;
+  const RecipeDiagnostics({
+    required this.recipes,
+    required this.repairedCount,
+    required this.duplicateIngredientsRemoved,
+    required this.duplicateStepsRemoved,
+    required this.manualIssues,
+  });
+}
+
+RecipeDiagnostics repairRecipeLibrary(List<Recipe> source) {
+  var repairedCount = 0;
+  var duplicateIngredientsRemoved = 0;
+  var duplicateStepsRemoved = 0;
+  final manualIssues = <String>[];
+  final repaired = <Recipe>[];
+  final usedIds = <String>{};
+
+  for (var index = 0; index < source.length; index++) {
+    final original = source[index];
+    var id = original.id.trim();
+    if (id.isEmpty || usedIds.contains(id)) {
+      id = 'repaired-' + (index + 1).toString();
+    }
+    usedIds.add(id);
+
+    final title = original.title.trim().isEmpty
+        ? 'وصفة بدون اسم ' + (index + 1).toString()
+        : original.title.trim();
+    final time = original.time.trim().isEmpty ? 'غير محدد' : original.time.trim();
+    final description = original.description.trim().isEmpty
+        ? title + ' بطابع بيتي.'
+        : original.description.trim();
+
+    final ingredients = <String>[];
+    for (final value in original.ingredients.map((x) => x.trim()).where((x) => x.isNotEmpty)) {
+      final key = SmartRecipeEngine.normalize(value);
+      if (ingredients.any((x) => SmartRecipeEngine.normalize(x) == key)) {
+        duplicateIngredientsRemoved++;
+      } else {
+        ingredients.add(value);
+      }
+    }
+
+    final steps = <String>[];
+    for (final value in original.steps.map((x) => x.trim()).where((x) => x.isNotEmpty)) {
+      if (steps.any((x) => x.toLowerCase() == value.toLowerCase())) {
+        duplicateStepsRemoved++;
+      } else {
+        steps.add(value);
+      }
+    }
+
+    if (ingredients.isEmpty) manualIssues.add(title + ': محتاجة مكونات.');
+    if (steps.isEmpty) manualIssues.add(title + ': محتاجة خطوات تحضير.');
+
+    if (id != original.id ||
+        title != original.title.trim() ||
+        time != original.time.trim() ||
+        description != original.description.trim() ||
+        original.category.trim().isEmpty ||
+        original.country.trim().isEmpty ||
+        ingredients.length != original.ingredients.length ||
+        steps.length != original.steps.length ||
+        original.imageUrl.trim() != original.imageUrl) {
+      repairedCount++;
+    }
+
+    repaired.add(Recipe(
+      id: id,
+      title: title,
+      category: original.category.trim().isEmpty ? 'بيتي' : original.category.trim(),
+      time: time,
+      description: description,
+      country: original.country.trim().isEmpty ? 'العالم العربي' : original.country.trim(),
+      ingredients: ingredients,
+      steps: steps,
+      favorite: original.favorite,
+      imageUrl: original.imageUrl.trim(),
+    ));
+  }
+
+  return RecipeDiagnostics(
+    recipes: repaired,
+    repairedCount: repairedCount,
+    duplicateIngredientsRemoved: duplicateIngredientsRemoved,
+    duplicateStepsRemoved: duplicateStepsRemoved,
+    manualIssues: manualIssues,
+  );
+}
+
+Widget recipeVisual(Recipe r, {double size = 58}) {
+  final fallback = Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: peach.withValues(alpha: .25),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Icon(Icons.restaurant_rounded, color: rose, size: size * .5),
+  );
+  if (r.imageUrl.trim().isEmpty) return fallback;
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(18),
+    child: Image.network(
+      r.imageUrl,
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => fallback,
+    ),
+  );
+}
+
+Widget recipeHeroImage(Recipe r, {double height = 190}) {
+  if (r.imageUrl.trim().isEmpty) return const SizedBox.shrink();
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(20),
+    child: Image.network(
+      r.imageUrl,
+      height: height,
+      width: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(
+        height: height,
+        color: peach.withValues(alpha: .2),
+        child: const Icon(Icons.broken_image_outlined, color: rose, size: 55),
+      ),
+    ),
+  );
+}
+
+void showCookingConversionDialog(BuildContext context, Recipe recipe) {
+  var from = recipe.steps.any(
+    (x) => RegExp(r'(قلاية|اير فراير|air fryer)', caseSensitive: false).hasMatch(x),
+  ) ? 'قلاية هوائية' : 'فرن عادي';
+  var to = from == 'قلاية هوائية' ? 'فرن عادي' : 'قلاية هوائية';
+  final temperature = TextEditingController(text: '180');
+  final match = RegExp(r'(\d+)').firstMatch(recipe.time);
+  final minutes = TextEditingController(text: (int.tryParse(match?.group(1) ?? '30') ?? 30).toString());
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (_, setDialogState) {
+        final converted = CookingConversion.convert(
+          from: from,
+          to: to,
+          temperatureC: int.tryParse(temperature.text) ?? 180,
+          minutes: int.tryParse(minutes.text) ?? 30,
+        );
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: cream,
+            title: const Text('تحويل طريقة الطهي', style: TextStyle(color: brown, fontWeight: FontWeight.w900)),
+            content: Column(mainAxisSize: MainAxisSize.min, children: [
+              DropdownButtonFormField<String>(
+                initialValue: from,
+                decoration: const InputDecoration(labelText: 'من'),
+                items: const [
+                  DropdownMenuItem(value: 'فرن عادي', child: Text('فرن عادي')),
+                  DropdownMenuItem(value: 'فرن بمروحة', child: Text('فرن بمروحة')),
+                  DropdownMenuItem(value: 'قلاية هوائية', child: Text('قلاية هوائية')),
+                ],
+                onChanged: (v) => setDialogState(() => from = v ?? from),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: to,
+                decoration: const InputDecoration(labelText: 'إلى'),
+                items: const [
+                  DropdownMenuItem(value: 'فرن عادي', child: Text('فرن عادي')),
+                  DropdownMenuItem(value: 'فرن بمروحة', child: Text('فرن بمروحة')),
+                  DropdownMenuItem(value: 'قلاية هوائية', child: Text('قلاية هوائية')),
+                ],
+                onChanged: (v) => setDialogState(() => to = v ?? to),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: temperature,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'الحرارة °C'),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: minutes,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'الدقائق'),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'المقترح: ' + converted['temperatureC'].toString() + '°C لمدة ' +
+                    converted['minutes'].toString() + ' دقيقة',
+                style: const TextStyle(color: brown, fontWeight: FontWeight.w900),
+              ),
+            ]),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إغلاق')),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
 List<String> parseIngredients(String value) => value
     .split(RegExp(r'[,،\n]+'))
     .map((x) => x.trim())
@@ -320,7 +564,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     navigatorKey:navigatorKey,theme:ThemeData(useMaterial3:true,scaffoldBackgroundColor:cream,colorScheme:ColorScheme.fromSeed(seedColor:rose)),
     home:Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       appBar:AppBar(backgroundColor:cream,elevation:0,title:const Text('مطبخي الدافي',style:TextStyle(fontWeight:FontWeight.w900,color:brown)),actions:[
-        IconButton(onPressed:showPantry,icon:const Icon(Icons.kitchen_rounded,color:brown))
+        IconButton(onPressed:diagnoseAndRepairRecipes,icon:const Icon(Icons.health_and_safety_rounded,color:brown)),IconButton(onPressed:showPantry,icon:const Icon(Icons.kitchen_rounded,color:brown))
       ]),
       body:IndexedStack(index:tab,children:[home(), recipesPage(), suggestionsPage(), favoritesPage(), smartKitchenPage()]),
       bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(i)=>setState(()=>tab=i),backgroundColor:card,indicatorColor:peach.withValues(alpha: .35),destinations:const[
@@ -439,15 +683,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: peach.withValues(alpha: .25),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Icon(Icons.restaurant_rounded, color: rose, size: 29),
-                ),
+                recipeVisual(r),
                 const SizedBox(width: 13),
                 Expanded(
                   child: Column(
@@ -495,7 +731,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   Widget recipeCard(Recipe r) => Card(color:card,elevation:0,margin:const EdgeInsets.only(bottom:12),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),child:InkWell(
     borderRadius:BorderRadius.circular(22),onTap:()=>details(r),child:Padding(padding:const EdgeInsets.all(16),child:Row(children:[
-      Container(width:58,height:58,decoration:BoxDecoration(color:peach.withValues(alpha: .25),borderRadius:BorderRadius.circular(18)),child:const Icon(Icons.restaurant_rounded,color:rose,size:29)),
+      recipeVisual(r),
       const SizedBox(width:13),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(r.title,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:16,color:brown)),const SizedBox(height:5),
         Text('${r.country} • ${r.category} • ${r.time}',style:TextStyle(color:brown.withValues(alpha: .65)))
@@ -517,14 +753,49 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     );
   }
 
+  Future<void> diagnoseAndRepairRecipes() async {
+    final result = repairRecipeLibrary(recipes);
+    setState(() => recipes = result.recipes);
+    await save();
+    if (!mounted) return;
+    showDialog<void>(
+      context: navigatorKey.currentState!.context,
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: cream,
+          title: const Text('فحص الوصفات', style: TextStyle(color: brown, fontWeight: FontWeight.w900)),
+          content: SingleChildScrollView(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('وصفات اتصلحت: ' + result.repairedCount.toString()),
+              Text('تكرارات مكونات اتشالت: ' + result.duplicateIngredientsRemoved.toString()),
+              Text('تكرارات خطوات اتشالت: ' + result.duplicateStepsRemoved.toString()),
+              const SizedBox(height: 10),
+              if (result.manualIssues.isEmpty)
+                const Text('مفيش مشاكل محتاجة تدخل يدوي.')
+              else ...[
+                const Text('محتاج إدخال يدوي:', style: TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 5),
+                ...result.manualIssues.take(20).map((x) => Text('• ' + x, style: const TextStyle(height: 1.4))),
+              ],
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('تمام')),
+          ],
+        ),
+      ),
+    );
+  }
+
   void toggleFavorite(Recipe r) { setState(()=>recipes=recipes.map((x)=>x.id==r.id?x.copyWith(favorite:!x.favorite):x).toList()); save(); }
 
   void details(Recipe r) => showModalBottomSheet(context:navigatorKey.currentState!.context,isScrollControlled:true,backgroundColor:cream,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:DraggableScrollableSheet(expand:false,initialChildSize:.72,builder:(_,c)=>ListView(controller:c,padding:const EdgeInsets.all(22),children:[
-    Text(r.title,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:7),
+    recipeHeroImage(r),const SizedBox(height:12),Text(r.title,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:7),
     Text('${r.category} • ${r.time}',style:TextStyle(color:brown.withValues(alpha: .65))),const SizedBox(height:15),
     Text(r.description,style:const TextStyle(color:brown,height:1.5)),
     const SizedBox(height:12),
-    FilledButton.icon(
+    Wrap(spacing:8,runSpacing:8,children:[OutlinedButton.icon(onPressed:()=>showCookingConversionDialog(navigatorKey.currentState!.context,r),icon:const Icon(Icons.swap_horiz_rounded),label:const Text('تحويل الطهي'))]),const SizedBox(height:8),FilledButton.icon(
       onPressed: () {
         markCooked(r);
         Navigator.pop(navigatorKey.currentState!.context);
@@ -540,15 +811,15 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   ]))));
 
   Future<void> addRecipe() async {
-    final title=TextEditingController(), ingredients=TextEditingController(), steps=TextEditingController(), time=TextEditingController();
+    final title=TextEditingController(), ingredients=TextEditingController(), steps=TextEditingController(), time=TextEditingController(), imageUrl=TextEditingController();
     await showDialog(context:navigatorKey.currentState!.context,builder:(dialogContext)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
       backgroundColor:cream,title:const Text('وصفة جديدة',style:TextStyle(color:brown,fontWeight:FontWeight.w900)),
       content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
-        field(title,'اسم الوصفة'),field(ingredients,'المكونات — افصلي بينها بفاصلة'),field(steps,'الطريقة — كل خطوة في سطر'),field(time,'الوقت، مثال: 30 دقيقة')
+        field(title,'اسم الوصفة'),field(ingredients,'المكونات — افصلي بينها بفاصلة'),field(steps,'الطريقة — كل خطوة في سطر'),field(time,'الوقت، مثال: 30 دقيقة'),field(imageUrl,'رابط صورة الوصفة (اختياري)')
       ])),
       actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('إلغاء')),FilledButton(onPressed:(){
         if(title.text.trim().isEmpty)return;
-        final r=Recipe(id:DateTime.now().microsecondsSinceEpoch.toString(),title:title.text.trim(),category:'بيتي',time:time.text.trim().isEmpty?'غير محدد':time.text.trim(),description:'وصفة من مطبخك.',country:'وصفة شخصية',ingredients:parseIngredients(ingredients.text),steps:parseSteps(steps.text));
+        final r=Recipe(id:DateTime.now().microsecondsSinceEpoch.toString(),title:title.text.trim(),category:'بيتي',time:time.text.trim().isEmpty?'غير محدد':time.text.trim(),description:'وصفة من مطبخك.',country:'وصفة شخصية',ingredients:parseIngredients(ingredients.text),steps:parseSteps(steps.text),imageUrl:imageUrl.text.trim());
         setState(()=>recipes.insert(0,r));save();Navigator.pop(dialogContext);
       },child:const Text('حفظ'))]
     )));
@@ -964,6 +1235,8 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
             controller: scrollController,
             padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
             children: [
+              recipeHeroImage(recipe),
+              const SizedBox(height: 12),
               Text(
                 recipe.title,
                 style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: brown),
@@ -994,7 +1267,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
                 title: Text(_scaledIngredient(item, servings)),
               )),
               Wrap(spacing: 7, runSpacing: 7, children: [
-                FilledButton.icon(
+                OutlinedButton.icon(onPressed:()=>showCookingConversionDialog(context,recipe),icon:const Icon(Icons.swap_horiz_rounded),label:const Text('تحويل الطهي')),const SizedBox(height:8),FilledButton.icon(
                   onPressed: () {
                     widget.onCooked(recipe);
                     Navigator.pop(sheetContext);

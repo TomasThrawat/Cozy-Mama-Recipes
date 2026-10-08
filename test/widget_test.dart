@@ -86,4 +86,56 @@ void main() {
   expect(find.text('البدائل'), findsOneWidget);
 });
 
+  test('cooking conversion is deterministic', () {
+    final air = CookingConversion.convert(
+      from: 'فرن عادي',
+      to: 'قلاية هوائية',
+      temperatureC: 200,
+      minutes: 50,
+    );
+    expect(air['temperatureC'], 180);
+    expect(air['minutes'], 40);
+    final oven = CookingConversion.convert(
+      from: 'قلاية هوائية',
+      to: 'فرن عادي',
+      temperatureC: 180,
+      minutes: 40,
+    );
+    expect(oven['temperatureC'], 200);
+    expect(oven['minutes'], 50);
+  });
+
+  test('recipe image persists through JSON', () {
+    final recipe = Recipe(
+      id: 'photo-test',
+      title: 'وصفة صورة',
+      category: 'بيتي',
+      time: '20 دقيقة',
+      description: 'اختبار',
+      ingredients: const ['بيض'],
+      steps: const ['اخفقي البيض.'],
+      imageUrl: 'https://example.com/recipe.jpg',
+    );
+    expect(Recipe.fromJson(recipe.toJson()).imageUrl, 'https://example.com/recipe.jpg');
+  });
+
+  test('recipe diagnostics repairs duplicates safely', () {
+    final result = repairRecipeLibrary([
+      Recipe(
+        id: '',
+        title: '',
+        category: '',
+        time: '',
+        description: '',
+        ingredients: const ['بيض', 'بيضة'],
+        steps: const ['خطوة', 'خطوة'],
+      ),
+    ]);
+    expect(result.repairedCount, 1);
+    expect(result.duplicateIngredientsRemoved, 1);
+    expect(result.duplicateStepsRemoved, 1);
+    expect(result.recipes.first.id, 'repaired-1');
+    expect(result.manualIssues, isEmpty);
+  });
+
 }
