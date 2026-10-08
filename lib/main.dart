@@ -872,7 +872,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
               label: Text(
                 selectedDate == null
                     ? 'تاريخ الانتهاء اختياري'
-                    : 'الانتهاء ' + selectedDate!.day.toString() + '/' + selectedDate!.month.toString(),
+                    : 'الانتهاء \${selectedDate!.day}/\${selectedDate!.month}',
               ),
             ),
           ]),
@@ -944,7 +944,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
     final shown = scaled == scaled.roundToDouble()
         ? scaled.toInt().toString()
         : scaled.toStringAsFixed(1);
-    return shown + ' ' + match.group(2)!;
+    return '\${shown} \${match.group(2)!}';
   }
 
   Future<void> _recipeDetails(Recipe recipe) async {
@@ -969,7 +969,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
                 style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: brown),
               ),
               const SizedBox(height: 5),
-              Text(recipe.country + ' • ' + recipe.category + ' • ' + recipe.time + ' • ' + _difficulty(recipe)),
+              Text('\${recipe.country} • \${recipe.category} • \${recipe.time} • \${_difficulty(recipe)}'),
               const SizedBox(height: 12),
               Text(recipe.description, style: const TextStyle(height: 1.5)),
               const SizedBox(height: 12),
@@ -1082,7 +1082,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               const Text('وضع الطبخ', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
               const SizedBox(height: 7),
-              Text('الخطوة ' + (step + 1).toString() + ' من ' + recipe.steps.length.toString()),
+              Text('الخطوة \${step + 1} من \${recipe.steps.length}'),
               const SizedBox(height: 12),
               Text(
                 recipe.steps[step],
@@ -1092,7 +1092,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
               const SizedBox(height: 12),
               if (seconds > 0)
                 Text(
-                  (seconds ~/ 60).toString() + ':' + (seconds % 60).toString().padLeft(2, '0'),
+                  '\${seconds ~/ 60}:\${(seconds % 60).toString().padLeft(2, '0')}',
                   style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900),
                 ),
               Wrap(
@@ -1115,7 +1115,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
                           }
                         });
                       },
-                      child: Text(minutes.toString() + ' د'),
+                      child: Text('\${minutes} د'),
                     ),
                   FilledButton(
                     onPressed: () {
@@ -1177,7 +1177,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
     leading: Icon(recipe == null ? Icons.remove_circle_outline_rounded : Icons.restaurant_rounded),
     title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
     subtitle: Text(recipe?.title ?? 'لا يوجد تطابق'),
-    trailing: recipe == null ? null : Text(_minutes(recipe).toString() + ' د'),
+    trailing: recipe == null ? null : Text('\${_minutes(recipe)} د'),
   );
 
   Widget _suggestionCard(SmartSuggestion item) {
@@ -1198,12 +1198,12 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
                 ),
               ),
-              Text(item.score.toString() + '%', style: const TextStyle(fontWeight: FontWeight.w900)),
+              Text('\${item.score}%', style: const TextStyle(fontWeight: FontWeight.w900)),
             ]),
             const SizedBox(height: 7),
             Text(item.reason),
-            if (item.matched.isNotEmpty) Text('موجود: ' + item.matched.take(5).join('، ')),
-            if (item.missing.isNotEmpty) Text('ناقص: ' + item.missing.take(5).join('، ')),
+            if (item.matched.isNotEmpty) Text('موجود: \${item.matched.take(5).join('، ')}'),
+            if (item.missing.isNotEmpty) Text('ناقص: \${item.missing.take(5).join('، ')}'),
             Wrap(spacing: 4, runSpacing: 4, children: [
               Chip(label: Text(item.recipe.country)),
               Chip(label: Text(item.recipe.category)),
@@ -1245,9 +1245,9 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
             ),
             IconButton(onPressed: _addPantry, icon: const Icon(Icons.add_circle_rounded)),
           ]),
-          Text(pantry.length.toString() + ' مكوّن محفوظ Offline'),
+          Text('\${pantry.length} مكوّن محفوظ Offline'),
           if (expiring.isNotEmpty)
-            Text('قريب من الانتهاء: ' + expiring.join('، '), style: const TextStyle(fontWeight: FontWeight.w800)),
+            Text('قريب من الانتهاء: \${expiring.join('، ')}', style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           Wrap(
             spacing: 5,
@@ -1347,7 +1347,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
       children: [
         const Text('المطبخ الذكي', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
         const SizedBox(height: 5),
-        Text('اكتبي المكونات أو جملة كاملة. الموسم الحالي: ' + _season()),
+        Text('اكتبي المكونات أو جملة كاملة. الموسم الحالي: \${_season()}'),
         const SizedBox(height: 12),
         TextField(
           controller: queryController,
@@ -1374,7 +1374,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
           Padding(
             padding: const EdgeInsets.only(top: 7),
             child: Text(
-              'فهمت: ' + interpreted.join('، '),
+              'فهمت: \${interpreted.join('، ')}',
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
