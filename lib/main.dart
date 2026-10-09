@@ -120,10 +120,18 @@ class SmartRecipeEngine {
   static bool _isWordCodeUnit(String value, int index) {
     if (index < 0 || index >= value.length) return false;
     final code = value.codeUnitAt(index);
-    return (code >= 48 && code <= 57) ||
+    final isAsciiWord = (code >= 48 && code <= 57) ||
         (code >= 65 && code <= 90) ||
-        (code >= 97 && code <= 122) ||
-        (code >= 0x0600 && code <= 0x06ff);
+        (code >= 97 && code <= 122);
+    final isArabicPunctuation =
+        (code >= 0x0600 && code <= 0x0605) ||
+        (code >= 0x0609 && code <= 0x060a) ||
+        (code >= 0x060c && code <= 0x060d) ||
+        (code >= 0x061b && code <= 0x061f) ||
+        (code >= 0x066a && code <= 0x066d) ||
+        code == 0x06d4;
+    final isArabicWord = code >= 0x0600 && code <= 0x06ff && !isArabicPunctuation;
+    return isAsciiWord || isArabicWord;
   }
 
   static List<String> interpretIngredients(String value) {
