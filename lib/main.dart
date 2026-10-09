@@ -64,7 +64,7 @@ class SmartRecipeEngine {
     'black pepper': 'فلفل', 'pepper': 'فلفل', 'فلفل أسود': 'فلفل',
     'salt': 'ملح',
     'beans': 'فاصوليا', 'فاصوليا': 'فاصوليا', 'فاصوليا بيضاء': 'فاصوليا بيضاء', 'فاصوليا خضراء': 'فاصوليا خضراء', 'green beans': 'فاصوليا خضراء',
-    'green beans': 'فاصوليا', 'chickpeas': 'حمص', 'حمص بطحينة': 'حمص',
+    'chickpeas': 'حمص', 'حمص بطحينة': 'حمص',
     'fava beans': 'فول', 'فول مدمس': 'فول',
     'lentils': 'عدس', 'عدس أصفر': 'عدس',
     'okra': 'بامية', 'eggplant': 'باذنجان',
@@ -172,12 +172,6 @@ class SmartRecipeEngine {
       pantry.contains(ingredient) ||
       (pantry.contains('فاصوليا') &&
           const {'فاصوليا بيضاء', 'فاصوليا خضراء'}.contains(ingredient));
-
-  static bool _matches(String pantryItem, String ingredient) {
-    final p = normalize(pantryItem);
-    final i = normalize(ingredient);
-    return p.isNotEmpty && i.isNotEmpty && _isAvailable({p}, i);
-  }
 
   static int _minutes(String value) {
     final m = RegExp(r'(\d+)').firstMatch(value);
@@ -674,7 +668,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       if (savedRecipes != null) {
         final seeds = starterRecipes();
         final seedIds = seeds.map((e) => e.id).toSet();
-        final savedById = {for (final recipe in savedRecipes!) recipe.id: recipe};
+        final savedById = {for (final recipe in savedRecipes) recipe.id: recipe};
         recipes = seeds.map((seed) {
           final old = savedById.remove(seed.id);
           return old == null ? seed : seed.copyWith(favorite: old.favorite);
@@ -684,7 +678,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       final ing = ingredientCandidates.firstWhere((candidate) => candidate != null, orElse: () => null);
       if (ing != null) pantry = List<String>.from(ing);
       if (savedHistory != null) {
-        recipeUseCount = savedHistory!.map((key, value) => MapEntry(key, value is num ? value.toInt() : 0));
+        recipeUseCount = savedHistory.map((key, value) => MapEntry(key, value is num ? value.toInt() : 0));
       }
       recentRecipeIds = List<String>.from(savedRecent);
     });
