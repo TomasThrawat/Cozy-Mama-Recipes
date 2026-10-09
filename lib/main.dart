@@ -177,9 +177,15 @@ class SmartRecipeEngine {
           final found = sourceText.indexOf(needle, start);
           if (found < 0) break;
           final end = found + needle.length;
-          if (!_isWordCodeUnit(sourceText, found - 1) &&
+          final startsAfterConjunction =
+              found > 0 &&
+              sourceText[found - 1] == 'و' &&
+              !_isWordCodeUnit(sourceText, found - 2);
+          if ((!_isWordCodeUnit(sourceText, found - 1) ||
+                  startsAfterConjunction) &&
               !_isWordCodeUnit(sourceText, end)) {
-            if (found < earliest) earliest = found;
+            final position = startsAfterConjunction ? found - 1 : found;
+            if (position < earliest) earliest = position;
             break;
           }
           start = found + 1;
