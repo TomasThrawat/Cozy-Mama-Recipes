@@ -138,4 +138,21 @@ void main() {
     expect(result.manualIssues, isEmpty);
   });
 
+  testWidgets('smart kitchen labels resolve values instead of showing raw templates', (tester) async {
+    await tester.pumpWidget(const CozyMamaApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المطبخ الذكي'));
+    await tester.pumpAndSettle();
+
+    final visibleText = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((widget) => widget.data ?? widget.textSpan?.toPlainText() ?? '')
+        .join('\n');
+    expect(visibleText, isNot(contains(r'${')));
+    expect(visibleText, isNot(contains('{{')));
+    expect(find.textContaining('الموسم الحالي:'), findsOneWidget);
+    expect(find.textContaining('مكوّن محفوظ Offline'), findsOneWidget);
+  });
+
 }
