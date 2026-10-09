@@ -1481,7 +1481,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
                           }
                         });
                       },
-                      child: Text('${minutes} د'),
+                      child: Text('$minutes د'),
                     ),
                   FilledButton(
                     onPressed: () {
