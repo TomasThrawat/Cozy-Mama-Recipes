@@ -545,8 +545,9 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     await p.setStringList('recent_recipe_ids', recentRecipeIds);
   }
 
+  List<SmartSuggestion>? _smartSuggestionsCache;
   List<SmartSuggestion> get smartSuggestions =>
-      SmartRecipeEngine.rank(
+      _smartSuggestionsCache ??= SmartRecipeEngine.rank(
         pantry,
         recipes,
         history: recipeUseCount,
@@ -556,7 +557,24 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   List<Recipe> get suggestions =>
       smartSuggestions.map((x) => x.recipe).toList();
 
-  List<Recipe> get filteredRecipes => filterRecipes(recipes, recipeQuery, country: selectedCountry);
+  List<Recipe>? _filteredRecipesCache;
+  List<Recipe>? _filteredRecipesSource;
+  String? _filteredRecipesQuery;
+  String? _filteredRecipesCountry;
+  List<Recipe> get filteredRecipes {
+    if (_filteredRecipesCache != null &&
+        identical(_filteredRecipesSource, recipes) &&
+        _filteredRecipesQuery == recipeQuery &&
+        _filteredRecipesCountry == selectedCountry) {
+      return _filteredRecipesCache!;
+    }
+    final result = filterRecipes(recipes, recipeQuery, country: selectedCountry);
+    _filteredRecipesSource = recipes;
+    _filteredRecipesQuery = recipeQuery;
+    _filteredRecipesCountry = selectedCountry;
+    _filteredRecipesCache = result;
+    return result;
+  }
 
   @override Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner:false, title:'مطبخي الدافي',
@@ -879,6 +897,13 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
   Map<String, String> notes = <String, String>{};
   Map<String, int> ratings = <String, int>{};
   bool excludeRecent = false;
+  String? _rankedCacheKey;
+  List<SmartSuggestion>? _rankedCache;
+  String? _seasonalCacheKey;
+  List<Recipe>? _seasonalCache;
+  List<Recipe>? _filterOptionsSource;
+  List<String> _countryOptionsCache = const <String>[];
+  List<String> _categoryOptionsCache = const <String>[];
 
   @override
   void initState() {
@@ -1042,27 +1067,34 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
   }
 
   List<SmartSuggestion> _ranked() {
+    final cacheKey = jsonEncode([
+      identityHashCode(widget.recipes),
+      query, pantry, country, category, difficulty, maxMinutes, excludeRecent,
+      widget.history, widget.recentRecipeIds,
+    ]);
+    if (_rankedCache != null && _rankedCacheKey == cacheKey) return _rankedCache!;
+
     final candidates = _filtered();
     final interpreted = _understandIngredients(query);
     final available = interpreted.isNotEmpty ? interpreted : pantry;
+    final result = available.isEmpty
+        ? candidates.take(60).map((recipe) => SmartSuggestion(
+            recipe: recipe,
+            matched: const [],
+            missing: recipe.ingredients,
+            score: widget.recentRecipeIds.contains(recipe.id) ? 75 : 90,
+            coverage: 0,
+            reason: 'اختيار اكتشاف من الكتالوج بدون مكوّنات محددة',
+          )).toList()
+        : SmartRecipeEngine.rank(
+            available, candidates,
+            history: widget.history,
+            recentRecipeIds: widget.recentRecipeIds,
+          ).take(60).toList();
 
-    if (available.isEmpty) {
-      return candidates.take(60).map((recipe) => SmartSuggestion(
-        recipe: recipe,
-        matched: const [],
-        missing: recipe.ingredients,
-        score: widget.recentRecipeIds.contains(recipe.id) ? 75 : 90,
-        coverage: 0,
-        reason: 'اختيار اكتشاف من الكتالوج بدون مكوّنات محددة',
-      )).toList();
-    }
-
-    return SmartRecipeEngine.rank(
-      available,
-      candidates,
-      history: widget.history,
-      recentRecipeIds: widget.recentRecipeIds,
-    ).take(60).toList();
+    _rankedCacheKey = cacheKey;
+    _rankedCache = result;
+    return result;
   }
 
   List<String> _seasonKeywords() {
@@ -1079,16 +1111,21 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
   }
 
   List<Recipe> _seasonal() {
+    final cacheKey = jsonEncode([
+      identityHashCode(widget.recipes), widget.recentRecipeIds, _season(),
+    ]);
+    if (_seasonalCache != null && _seasonalCacheKey == cacheKey) return _seasonalCache!;
     final keys = _seasonKeywords().map(SmartRecipeEngine.normalize).toList();
-    return widget.recipes.where((recipe) {
+    final result = widget.recipes.where((recipe) {
       if (widget.recentRecipeIds.contains(recipe.id)) return false;
       final hay = [
-        recipe.title,
-        recipe.category,
-        ...recipe.ingredients,
+        recipe.title, recipe.category, ...recipe.ingredients,
       ].map(SmartRecipeEngine.normalize).join(' ');
       return keys.any(hay.contains);
     }).take(12).toList();
+    _seasonalCacheKey = cacheKey;
+    _seasonalCache = result;
+    return result;
   }
 
   Recipe? _categoryRecipe(String contains, {String? avoid}) {
@@ -1571,8 +1608,13 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
   );
 
   Widget _filters() {
-    final countries = <String>{'الكل', ...widget.recipes.map((r) => r.country)}.toList()..sort();
-    final categories = <String>{'الكل', ...widget.recipes.map((r) => r.category)}.toList()..sort();
+    if (!identical(_filterOptionsSource, widget.recipes)) {
+      _filterOptionsSource = widget.recipes;
+      _countryOptionsCache = <String>{'الكل', ...widget.recipes.map((r) => r.country)}.toList()..sort();
+      _categoryOptionsCache = <String>{'الكل', ...widget.recipes.map((r) => r.category)}.toList()..sort();
+    }
+    final countries = _countryOptionsCache;
+    final categories = _categoryOptionsCache;
 
     return Wrap(spacing: 6, runSpacing: 6, children: [
       DropdownButton<String>(
