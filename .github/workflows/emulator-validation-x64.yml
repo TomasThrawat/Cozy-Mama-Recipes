@@ -1,0 +1,61 @@
+name: Temporary Emulator Validation (x86_64)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  emulator-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create Android project files
+        run: flutter create --platforms=android --project-name cozy_mama_recipes .
+
+      - name: Apply app launcher icon
+        shell: bash
+        run: |
+          mkdir -p android/app/src/main/res/drawable
+          cp assets/cozy_icon.xml android/app/src/main/res/drawable/cozy_icon.xml
+          sed -i 's#android:icon="@mipmap/ic_launcher"#android:icon="@drawable/cozy_icon"#' android/app/src/main/AndroidManifest.xml
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build temporary x86_64 APK
+        run: flutter build apk --release --target-platform android-x64
+
+      - name: Verify APK ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$APK"
+          ABIS="$(unzip -Z1 "$APK" | awk -F/ '/^lib\/[^/]+\/.*\.so$/ {print $2}' | sort -u)"
+          echo "APK native ABIs: ${ABIS:-none}"
+          test "$ABIS" = "x86_64"
+
+      - name: Upload temporary emulator APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: cozy-mama-recipes-emulator-x64
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 1
