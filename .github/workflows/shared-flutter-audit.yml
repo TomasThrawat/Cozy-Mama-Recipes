@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   flutter-quality-and-security:
-    uses: TomasThrawat/hyouka-flutter-workflows/.github/workflows/flutter-ci.yml@v1.1.7
+    uses: TomasThrawat/hyouka-flutter-workflows/.github/workflows/flutter-ci.yml@891db05805c77524301a3d4617a380731280ea51
     with:
       run-analyze: true
       run-tests: true
