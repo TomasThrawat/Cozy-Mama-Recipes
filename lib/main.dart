@@ -18,6 +18,7 @@ class Recipe {
   final bool favorite;
   const Recipe({required this.id, required this.title, required this.category, required this.time, required this.description, required this.ingredients, required this.steps, this.country = 'العالم العربي', this.favorite = false, this.imageUrl = ''});
   Recipe copyWith({bool? favorite, String? country, String? imageUrl}) => Recipe(id:id,title:title,category:category,time:time,description:description,ingredients:ingredients,steps:steps,country:country ?? this.country,favorite:favorite ?? this.favorite,imageUrl:imageUrl ?? this.imageUrl);
+  bool get isExpandedCatalog => RegExp(r'^ar-[a-z]{2}-\d{3}$').hasMatch(id);
   Map<String,dynamic> toJson() => {'id':id,'title':title,'category':category,'time':time,'description':description,'country':country,'ingredients':ingredients,'steps':steps,'favorite':favorite,'imageUrl':imageUrl};
   factory Recipe.fromJson(Map<String,dynamic> j) => Recipe(
     id:j['id'] ?? DateTime.now().microsecondsSinceEpoch.toString(),
@@ -54,21 +55,21 @@ class SmartRecipeEngine {
     'meat': 'لحم', 'beef': 'لحم', 'لحمة': 'لحم', 'لحمه': 'لحم',
     'potato': 'بطاطس', 'potatoes': 'بطاطس', 'بطاطا': 'بطاطس',
     'tomato': 'طماطم', 'tomatoes': 'طماطم',
-    'onion': 'بصل', 'rice': 'ارز', 'رز': 'ارز', 'أرز': 'ارز',
+    'onion': 'بصل', 'rice': 'ارز', 'رز': 'ارز', 'أرز': 'ارز', 'ارز': 'ارز',
     'pasta': 'مكرونه', 'macaroni': 'مكرونه', 'مكرونه': 'مكرونه', 'مكرونة': 'مكرونه',
     'garlic': 'ثوم', 'butter': 'زبد', 'زبدة': 'زبد',
-    'oil': 'زيت', 'carrot': 'جزر', 'carrots': 'جزر',
+    'oil': 'زيت', 'carrot': 'جزر', 'carrots': 'جزر', 'زيت زيتون': 'زيت زيتون', 'زيت الزيتون': 'زيت زيتون',
     'peas': 'بازلاء', 'بسلة': 'بازلاء',
     'bread': 'خبز', 'خبز': 'خبز', 'عيش': 'خبز',
     'black pepper': 'فلفل', 'pepper': 'فلفل', 'فلفل أسود': 'فلفل',
     'salt': 'ملح',
-    'beans': 'فاصوليا', 'فاصوليا بيضاء': 'فاصوليا', 'فاصوليا خضراء': 'فاصوليا',
+    'beans': 'فاصوليا', 'فاصوليا': 'فاصوليا', 'فاصوليا بيضاء': 'فاصوليا بيضاء', 'فاصوليا خضراء': 'فاصوليا خضراء', 'green beans': 'فاصوليا خضراء',
     'green beans': 'فاصوليا', 'chickpeas': 'حمص', 'حمص بطحينة': 'حمص',
     'fava beans': 'فول', 'فول مدمس': 'فول',
     'lentils': 'عدس', 'عدس أصفر': 'عدس',
     'okra': 'بامية', 'eggplant': 'باذنجان',
     'zucchini': 'كوسه', 'كوسا': 'كوسه', 'كوسة': 'كوسه',
-    'cauliflower': 'قرنبيط', 'shrimp': 'جمبري', 'prawns': 'جمبري',
+    'cauliflower': 'قرنبيط', 'shrimp': 'جمبري', 'prawns': 'جمبري', 'cucumber': 'خيار', 'خيار': 'خيار', 'lettuce': 'خس', 'خس': 'خس', 'pumpkin': 'قرع', 'قرع': 'قرع',
     'روبيان': 'جمبري', 'قريدس': 'جمبري', 'fish': 'سمك', 'سمكة': 'سمك',
     'yogurt': 'زبادي', 'لبن رايب': 'زبادي', 'tahini': 'طحينه',
     'طحينة': 'طحينه', 'لبنة': 'لبنه', 'لبنه': 'لبنه',
@@ -81,37 +82,101 @@ class SmartRecipeEngine {
   };
 
   static const Set<String> _staples = {'ملح', 'فلفل', 'زيت', 'ماء', 'سكر', 'خل'};
+  static const Set<String> _units = {
+    'كوب', 'اكواب', 'كوبان', 'كوبين', 'ملعقة', 'ملاعق', 'ملعقه',
+    'ملعقتان', 'ملعقتين', 'صغيرة', 'صغيره', 'كبيرة', 'كبيره',
+    'جرام', 'غرام', 'كيلو', 'كجم', 'جم', 'مل', 'مليلتر', 'لتر',
+    'قطعة', 'قطع', 'حبة', 'حبات', 'حبه', 'رشة', 'رشات', 'فص', 'فصوص',
+    'رغيف', 'رغيفين', 'cup', 'cups', 'tbsp', 'tsp', 'tablespoon',
+    'tablespoons', 'teaspoon', 'teaspoons', 'gram', 'grams', 'kg',
+    'g', 'ml', 'liter', 'liters', 'clove', 'cloves', 'piece', 'pieces',
+  };
+
+  static String _fold(String value) => value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[ًٌٍَُِّْـ]'), '')
+      .replaceAll('أ', 'ا')
+      .replaceAll('إ', 'ا')
+      .replaceAll('آ', 'ا')
+      .replaceAll('ى', 'ي')
+      .replaceAll('ؤ', 'و')
+      .replaceAll('ئ', 'ي')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 
   static String normalize(String value) {
-    var x = value.toLowerCase().trim();
-    x = x.replaceAll(RegExp(r'\b\d+(?:[.,]\d+)?\b'), ' ');
-    x = x.replaceAll(RegExp(r'\b(?:كوب|أكواب|ملعقة|ملاعق|جرام|غرام|كيلو|كجم|مل|لتر|قطعة|حبة|حبات)\b'), ' ');
-    x = x
-        .replaceAll(RegExp(r'[ًٌٍَُِّْـ]'), '')
-        .replaceAll('أ', 'ا')
-        .replaceAll('إ', 'ا')
-        .replaceAll('آ', 'ا')
-        .replaceAll('ى', 'ي')
-        .replaceAll('ؤ', 'و')
-        .replaceAll('ئ', 'ي')
-        .replaceAll(RegExp(r'\s+'), ' ');
+    var x = _fold(value).replaceAll(RegExp(r'[0-9٠-٩]+(?:[.,٫][0-9٠-٩]+)?'), ' ');
+    x = x.split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty && !_units.contains(token))
+        .join(' ')
+        .trim();
+    if (x.isEmpty) return '';
     final direct = _aliases[x];
     if (direct != null) return direct;
     x = x.replaceAll('ة', 'ه');
     return _aliases[x] ?? x;
   }
 
+  static bool _isWordCodeUnit(String value, int index) {
+    if (index < 0 || index >= value.length) return false;
+    final code = value.codeUnitAt(index);
+    return (code >= 48 && code <= 57) ||
+        (code >= 65 && code <= 90) ||
+        (code >= 97 && code <= 122) ||
+        (code >= 0x0600 && code <= 0x06ff);
+  }
+
+  static List<String> interpretIngredients(String value) {
+    final chunks = value.split(
+      RegExp(r'[,،;؛\n]+|\s+و(?=\s|[\u0600-\u06FF])\s*'),
+    );
+    final aliases = _aliases.keys.toList()
+      ..sort((a, b) => _fold(b).length.compareTo(_fold(a).length));
+    final result = <String>[];
+
+    for (final chunk in chunks) {
+      final text = _fold(chunk).replaceFirst(
+        RegExp(r'^(?:الموجود عندي|متوفر عندي|عندي كمان|عندي بس|عندي|عندى|معايا|متوفر|الموجود)\s*'),
+        '',
+      ).trim();
+      if (text.isEmpty) continue;
+
+      final occupied = <List<int>>[];
+      for (final alias in aliases) {
+        final needle = _fold(alias);
+        if (needle.isEmpty) continue;
+        var start = 0;
+        while (start <= text.length - needle.length) {
+          final found = text.indexOf(needle, start);
+          if (found < 0) break;
+          final end = found + needle.length;
+          final bounded = !_isWordCodeUnit(text, found - 1) && !_isWordCodeUnit(text, end);
+          final overlaps = occupied.any((span) => found < span[1] && end > span[0]);
+          if (bounded && !overlaps) {
+            final canonical = normalize(alias);
+            if (canonical.isNotEmpty && !result.contains(canonical)) result.add(canonical);
+            occupied.add([found, end]);
+          }
+          start = found + 1;
+        }
+      }
+      if (occupied.isEmpty) {
+        final normalized = normalize(text);
+        if (normalized.length >= 2 && !result.contains(normalized)) result.add(normalized);
+      }
+    }
+    return result;
+  }
+
+  static bool _isAvailable(Set<String> pantry, String ingredient) =>
+      pantry.contains(ingredient) ||
+      (pantry.contains('فاصوليا') &&
+          const {'فاصوليا بيضاء', 'فاصوليا خضراء'}.contains(ingredient));
+
   static bool _matches(String pantryItem, String ingredient) {
     final p = normalize(pantryItem);
     final i = normalize(ingredient);
-    if (p.isEmpty || i.isEmpty) return false;
-    if (p == i) return true;
-    final pTokens = p.split(' ').where((x) => x.isNotEmpty).toSet();
-    final iTokens = i.split(' ').where((x) => x.isNotEmpty).toSet();
-    final shared = pTokens.intersection(iTokens);
-    if (shared.isEmpty) return false;
-    if (pTokens.length == 1 || iTokens.length == 1) return true;
-    return shared.length >= (pTokens.length < iTokens.length ? pTokens.length : iTokens.length);
+    return p.isNotEmpty && i.isNotEmpty && _isAvailable({p}, i);
   }
 
   static int _minutes(String value) {
@@ -147,8 +212,15 @@ class SmartRecipeEngine {
       final matched = <String>[];
       final missing = <String>[];
 
+      final normalizedIngredients = <String>{};
       for (final ingredient in useful) {
-        if (normalizedPantry.any((item) => _matches(item, ingredient))) {
+        final normalized = normalize(ingredient);
+        if (normalized.isEmpty) {
+          missing.add(ingredient);
+          continue;
+        }
+        normalizedIngredients.add(normalized);
+        if (_isAvailable(normalizedPantry, normalized)) {
           matched.add(ingredient);
         } else {
           missing.add(ingredient);
@@ -158,10 +230,15 @@ class SmartRecipeEngine {
       if (matched.isEmpty) continue;
 
       final coverage = useful.isEmpty ? 0.0 : matched.length / useful.length;
-      final pantryUse = pantry.isEmpty
+      final relevantPantry = normalizedPantry.difference(_staples);
+      final pantryUse = relevantPantry.isEmpty
           ? 0.0
-          : normalizedPantry.where((item) => recipe.ingredients.any((ing) => _matches(item, ing))).length /
-              normalizedPantry.length;
+          : relevantPantry.where((item) =>
+              normalizedIngredients.contains(item) ||
+              (item == 'فاصوليا' &&
+                  normalizedIngredients.any((value) =>
+                      value == 'فاصوليا بيضاء' || value == 'فاصوليا خضراء'))).length /
+              relevantPantry.length;
 
       var score = (coverage * 55).round();
       score += (matched.length * 7).clamp(0, 28).toInt();
@@ -480,6 +557,44 @@ List<Recipe> filterRecipes(List<Recipe> source, String query, {String country = 
   }).toList();
 }
 
+Future<void> _backupPreference(SharedPreferences prefs, String key) async {
+  final current = prefs.get(key);
+  if (current == null) return;
+  final backupKey = '${key}_backup';
+  if (current is String) {
+    try {
+      jsonDecode(current);
+      await prefs.setString(backupKey, current);
+    } catch (_) {
+      // Keep the last-known-good backup if the primary value is malformed.
+    }
+  } else if (current is List<String>) {
+    await prefs.setStringList(backupKey, List<String>.from(current));
+  }
+}
+
+String? _safePreferenceString(SharedPreferences prefs, String key) {
+  try { return prefs.getString(key); } catch (_) { return null; }
+}
+
+List<String>? _safePreferenceStringList(SharedPreferences prefs, String key) {
+  try { return prefs.getStringList(key); } catch (_) { return null; }
+}
+
+Map<String, dynamic> _readJsonMapWithBackup(SharedPreferences prefs, String key) {
+  for (final candidateKey in [key, '${key}_backup']) {
+    final raw = _safePreferenceString(prefs, candidateKey);
+    if (raw == null) continue;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      // Try the retained valid copy instead of failing app startup.
+    }
+  }
+  return <String, dynamic>{};
+}
+
 void main() => runApp(const CozyMamaApp());
 
 class CozyMamaApp extends StatefulWidget {
@@ -497,42 +612,79 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   String recipeQuery = '';
   String selectedCountry = 'الكل';
   final TextEditingController recipeSearchController = TextEditingController();
+  Timer? _recipeSearchDebounce;
 
   @override void initState() { super.initState(); load(); }
 
   @override void dispose() {
+    _recipeSearchDebounce?.cancel();
     recipeSearchController.dispose();
     super.dispose();
   }
 
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
-    final raw = p.getString('recipes');
-    final ing = p.getStringList('pantry');
-    final rawHistory = p.getString('recipe_use_count');
-    final savedRecent = p.getStringList('recent_recipe_ids') ?? const <String>[];
+    final rawCandidates = [
+      _safePreferenceString(p, 'recipes'),
+      _safePreferenceString(p, 'recipes_backup'),
+    ];
+    final ingredientCandidates = [
+      _safePreferenceStringList(p, 'pantry'),
+      _safePreferenceStringList(p, 'pantry_backup'),
+    ];
+    final historyCandidates = [
+      _safePreferenceString(p, 'recipe_use_count'),
+      _safePreferenceString(p, 'recipe_use_count_backup'),
+    ];
+    final savedRecent = _safePreferenceStringList(p, 'recent_recipe_ids') ??
+        _safePreferenceStringList(p, 'recent_recipe_ids_backup') ??
+        const <String>[];
+
+    List<Recipe>? savedRecipes;
+    for (final candidate in rawCandidates) {
+      if (candidate == null) continue;
+      try {
+        final decoded = jsonDecode(candidate);
+        if (decoded is! List) continue;
+        savedRecipes = decoded.whereType<Map>()
+            .map((entry) => Recipe.fromJson(Map<String, dynamic>.from(entry))).toList();
+        break;
+      } catch (_) {
+        // Fall back to backup and keep startup alive.
+      }
+    }
+
+    Map<String, dynamic>? savedHistory;
+    for (final candidate in historyCandidates) {
+      if (candidate == null) continue;
+      try {
+        final decoded = jsonDecode(candidate);
+        if (decoded is Map) {
+          savedHistory = Map<String, dynamic>.from(decoded);
+          break;
+        }
+      } catch (_) {
+        // Fall back to the most recent valid history copy.
+      }
+    }
+
     if (!mounted) return;
     setState(() {
       _invalidateRecipeCaches();
-      if (raw != null) {
-        final saved = (jsonDecode(raw) as List).map((e) => Recipe.fromJson(e)).toList();
+      if (savedRecipes != null) {
         final seeds = starterRecipes();
         final seedIds = seeds.map((e) => e.id).toSet();
-        final savedById = {for (final r in saved) r.id: r};
+        final savedById = {for (final recipe in savedRecipes!) recipe.id: recipe};
         recipes = seeds.map((seed) {
           final old = savedById.remove(seed.id);
           return old == null ? seed : seed.copyWith(favorite: old.favorite);
         }).toList()
-          ..addAll(savedById.values.where((r) => !seedIds.contains(r.id)));
+          ..addAll(savedById.values.where((recipe) => !seedIds.contains(recipe.id)));
       }
-      if (ing != null) pantry = ing;
-      if (rawHistory != null) {
-        final decoded = jsonDecode(rawHistory);
-        if (decoded is Map) {
-          recipeUseCount = decoded.map(
-            (key, value) => MapEntry(key.toString(), value is num ? value.toInt() : 0),
-          );
-        }
+      final ing = ingredientCandidates.firstWhere((candidate) => candidate != null, orElse: () => null);
+      if (ing != null) pantry = List<String>.from(ing);
+      if (savedHistory != null) {
+        recipeUseCount = savedHistory!.map((key, value) => MapEntry(key, value is num ? value.toInt() : 0));
       }
       recentRecipeIds = List<String>.from(savedRecent);
     });
@@ -540,6 +692,10 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   Future<void> save() async {
     final p = await SharedPreferences.getInstance();
+    await _backupPreference(p, 'recipes');
+    await _backupPreference(p, 'pantry');
+    await _backupPreference(p, 'recipe_use_count');
+    await _backupPreference(p, 'recent_recipe_ids');
     await p.setString('recipes', jsonEncode(recipes.map((e) => e.toJson()).toList()));
     await p.setStringList('pantry', pantry);
     await p.setString('recipe_use_count', jsonEncode(recipeUseCount));
@@ -638,9 +794,20 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     return Column(children: [
       Padding(padding: const EdgeInsets.fromLTRB(18, 10, 18, 0), child: section('وصفاتي', '${list.length} ظاهر من ${recipes.length} وصفة')),
       Padding(padding: const EdgeInsets.fromLTRB(18, 12, 18, 8), child: TextField(
-        controller: recipeSearchController, onChanged: (value) => setState(() => recipeQuery = value), textDirection: TextDirection.rtl,
+        controller: recipeSearchController,
+        onChanged: (value) {
+          _recipeSearchDebounce?.cancel();
+          _recipeSearchDebounce = Timer(const Duration(milliseconds: 140), () {
+            if (mounted) setState(() => recipeQuery = value);
+          });
+        },
+        textDirection: TextDirection.rtl,
         decoration: InputDecoration(hintText: 'ابحثي باسم الوصفة أو المكوّن…', prefixIcon: const Icon(Icons.search_rounded),
-          suffixIcon: recipeQuery.isEmpty ? null : IconButton(onPressed: () { recipeSearchController.clear(); setState(() => recipeQuery = ''); }, icon: const Icon(Icons.clear_rounded)),
+          suffixIcon: recipeQuery.isEmpty ? null : IconButton(onPressed: () {
+             _recipeSearchDebounce?.cancel();
+             recipeSearchController.clear();
+             setState(() => recipeQuery = '');
+           }, icon: const Icon(Icons.clear_rounded)),
           filled: true, fillColor: Colors.white70, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)),
       )),
       Padding(padding: const EdgeInsets.fromLTRB(18, 0, 18, 12), child: DropdownButtonFormField<String>(
@@ -995,91 +1162,31 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
     return 'الشتاء';
   }
 
-  List<String> _understandIngredients(String value) {
-    final text = value.toLowerCase();
-    const aliases = <String, String>{
-      'بيض': 'بيض', 'بيضة': 'بيض', 'بيضه': 'بيض', 'egg': 'بيض', 'eggs': 'بيض',
-      'جبنة': 'جبن', 'جبنه': 'جبن', 'cheese': 'جبن',
-      'لبن': 'لبن', 'حليب': 'لبن', 'milk': 'لبن',
-      'فراخ': 'دجاج', 'دجاج': 'دجاج', 'chicken': 'دجاج',
-      'لحمة': 'لحم', 'لحمه': 'لحم', 'beef': 'لحم', 'meat': 'لحم',
-      'رز': 'ارز', 'أرز': 'ارز', 'rice': 'ارز',
-      'مكرونة': 'مكرونه', 'مكرونه': 'مكرونه', 'pasta': 'مكرونه',
-      'بطاطس': 'بطاطس', 'بطاطا': 'بطاطس', 'potato': 'بطاطس',
-      'طماطم': 'طماطم', 'طماطه': 'طماطم', 'tomato': 'طماطم',
-      'بصل': 'بصل', 'onion': 'بصل',
-      'فاصوليا': 'فاصوليا', 'لوبيا': 'فاصوليا', 'beans': 'فاصوليا',
-      'فاصوليا بيضاء': 'فاصوليا', 'فاصوليا خضراء': 'فاصوليا',
-      'حمص': 'حمص', 'chickpeas': 'حمص',
-      'فول': 'فول', 'fava beans': 'فول',
-      'عدس': 'عدس', 'lentils': 'عدس',
-      'بامية': 'بامية', 'okra': 'بامية',
-      'باذنجان': 'باذنجان', 'eggplant': 'باذنجان',
-      'كوسة': 'كوسه', 'كوسا': 'كوسه', 'zucchini': 'كوسه',
-      'قرنبيط': 'قرنبيط', 'cauliflower': 'قرنبيط',
-      'جمبري': 'جمبري', 'روبيان': 'جمبري', 'قريدس': 'جمبري', 'shrimp': 'جمبري',
-      'سمك': 'سمك', 'fish': 'سمك',
-      'زبادي': 'زبادي', 'لبن رايب': 'زبادي', 'yogurt': 'زبادي',
-      'طحينة': 'طحينه', 'tahini': 'طحينه',
-      'خبز': 'خبز', 'عيش': 'خبز', 'bread': 'خبز',
-      'ليمون': 'ليمون', 'lemon': 'ليمون',
-      'ثوم': 'ثوم', 'garlic': 'ثوم',
-      'جزر': 'جزر', 'carrot': 'جزر',
-      'بقدونس': 'بقدونس', 'parsley': 'بقدونس',
-      'نعناع': 'نعناع', 'mint': 'نعناع',
-    };
-    final result = <String>[];
-    aliases.forEach((key, value) {
-      if (text.contains(key) && !result.contains(value)) result.add(value);
-    });
-
-    final cleaned = value.replaceAll(
-      RegExp(r'(عندي|عندى|موجود عندي|متوفر عندي|عندي بس)'),
-      ',',
-    );
-    for (final item in parseIngredients(cleaned)) {
-      final normalized = SmartRecipeEngine.normalize(item);
-      if (normalized.length >= 2 && !result.contains(normalized)) {
-        result.add(normalized);
-      }
-    }
-    return result;
-  }
+  List<String> _understandIngredients(String value) =>
+      SmartRecipeEngine.interpretIngredients(value);
 
   Future<void> _loadSmartData() async {
     final prefs = await SharedPreferences.getInstance();
-    final rawExpiry = prefs.getString('smart_expiry');
-    final rawNotes = prefs.getString('smart_notes');
-    final rawRatings = prefs.getString('smart_ratings');
+    final savedExpiry = _readJsonMapWithBackup(prefs, 'smart_expiry');
+    final savedNotes = _readJsonMapWithBackup(prefs, 'smart_notes');
+    final savedRatings = _readJsonMapWithBackup(prefs, 'smart_ratings');
+    final savedShopping = _safePreferenceStringList(prefs, 'smart_shopping') ??
+        _safePreferenceStringList(prefs, 'smart_shopping_backup') ?? const <String>[];
     if (!mounted) return;
     setState(() {
-      final savedShopping = prefs.getStringList('smart_shopping');
-      if (savedShopping != null) shopping = savedShopping;
-      if (rawExpiry != null) {
-        final decoded = jsonDecode(rawExpiry);
-        if (decoded is Map) {
-          expiry = decoded.map(
-            (k, v) => MapEntry(k.toString(), (v as num).toInt()),
-          );
-        }
-      }
-      if (rawNotes != null) {
-        final decoded = jsonDecode(rawNotes);
-        if (decoded is Map) {
-          notes = decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
-        }
-      }
-      if (rawRatings != null) {
-        final decoded = jsonDecode(rawRatings);
-        if (decoded is Map) {
-          ratings = decoded.map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
-        }
-      }
+      expiry = savedExpiry.map((key, value) => MapEntry(key, value is num ? value.toInt() : 0));
+      notes = savedNotes.map((key, value) => MapEntry(key, value.toString()));
+      ratings = savedRatings.map((key, value) => MapEntry(key, value is num ? value.toInt() : 0));
+      shopping = List<String>.from(savedShopping);
     });
   }
 
   Future<void> _saveSmartData() async {
     final prefs = await SharedPreferences.getInstance();
+    await _backupPreference(prefs, 'smart_expiry');
+    await _backupPreference(prefs, 'smart_shopping');
+    await _backupPreference(prefs, 'smart_notes');
+    await _backupPreference(prefs, 'smart_ratings');
     await prefs.setString('smart_expiry', jsonEncode(expiry));
     await prefs.setStringList('smart_shopping', shopping);
     await prefs.setString('smart_notes', jsonEncode(notes));
@@ -1338,6 +1445,25 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
               Text('${recipe.country} • ${recipe.category} • ${recipe.time} • ${_difficulty(recipe)}'),
               const SizedBox(height: 12),
               Text(recipe.description, style: const TextStyle(height: 1.5)),
+              if (recipe.isExpandedCatalog) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFFFFE8D6), borderRadius: BorderRadius.circular(12)),
+                  child: const Text(
+                    'تنبيه: دي وصفة من الكتالوج الموسّع؛ المكونات والخطوات مبدئية وقد تكون عامة. راجعيها قبل الاعتماد عليها.',
+                    style: TextStyle(color: brown, height: 1.45),
+                  ),
+                ),
+              ],
+              if (recipe.ingredients.any((item) => !RegExp(r'^\s*[0-9٠-٩]').hasMatch(item))) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'المكونات اللي من غير كميات مش هتتغيّر تلقائيًا مع تعديل عدد الأفراد.',
+                  style: TextStyle(color: brown, height: 1.4),
+                ),
+              ],
               const SizedBox(height: 12),
               Row(children: [
                 const Text('لـ', style: TextStyle(fontWeight: FontWeight.w800)),

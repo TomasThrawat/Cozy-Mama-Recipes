@@ -86,6 +86,22 @@ void main() {
   expect(find.text('البدائل'), findsOneWidget);
 });
 
+  testWidgets('expanded recipes disclose provisional generated content', (tester) async {
+    await tester.pumpWidget(const CozyMamaApp());
+    await tester.pumpAndSettle();
+    final expandedRecipe = starterRecipes().firstWhere((item) => item.isExpandedCatalog);
+    await tester.tap(find.text('وصفاتي'));
+    await tester.pumpAndSettle();
+    final searchField = find.byType(TextField).first;
+    await tester.tap(searchField);
+    await tester.enterText(searchField, expandedRecipe.title);
+    await tester.pump(const Duration(milliseconds: 160));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(expandedRecipe.title));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('المكونات والخطوات مبدئية'), findsOneWidget);
+  });
+
   test('cooking conversion is deterministic', () {
     final air = CookingConversion.convert(
       from: 'فرن عادي',
