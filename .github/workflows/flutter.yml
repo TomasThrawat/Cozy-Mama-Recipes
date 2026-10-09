@@ -52,7 +52,7 @@ jobs:
       - name: Test
         run: flutter test
       - name: Build arm64 APK
-        run: flutter build apk --release --target-platform android-arm64 --no-pub
+        run: flutter build apk --release --target-platform android-arm64
       - name: Verify APK contains arm64-v8a only
         shell: bash
         run: |
