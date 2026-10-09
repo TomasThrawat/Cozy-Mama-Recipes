@@ -1042,6 +1042,21 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     recipeHeroImage(r),const SizedBox(height:12),Text(r.title,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:7),
     Text('${r.category} • ${r.time}',style:TextStyle(color:brown.withValues(alpha: .65))),const SizedBox(height:15),
     Text(r.description,style:const TextStyle(color:brown,height:1.5)),
+    if (r.isExpandedCatalog) ...[
+      const SizedBox(height:10),
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFE8D6),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'تنبيه: دي وصفة من الكتالوج الموسّع؛ المكونات والخطوات مبدئية وقد تكون عامة. راجعيها قبل الاعتماد عليها.',
+          style: TextStyle(color: brown, height: 1.45),
+        ),
+      ),
+    ],
     const SizedBox(height:12),
     Wrap(spacing:8,runSpacing:8,children:[OutlinedButton.icon(onPressed:()=>showCookingConversionDialog(navigatorKey.currentState!.context,r),icon:const Icon(Icons.swap_horiz_rounded),label:const Text('تحويل الطهي'))]),const SizedBox(height:8),FilledButton.icon(
       onPressed: () {
