@@ -513,6 +513,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     final savedRecent = p.getStringList('recent_recipe_ids') ?? const <String>[];
     if (!mounted) return;
     setState(() {
+      _invalidateRecipeCaches();
       if (raw != null) {
         final saved = (jsonDecode(raw) as List).map((e) => Recipe.fromJson(e)).toList();
         final seeds = starterRecipes();
@@ -546,6 +547,23 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   }
 
   List<SmartSuggestion>? _smartSuggestionsCache;
+  List<Recipe>? _filteredRecipesCache;
+  List<Recipe>? _filteredRecipesSource;
+  List<Recipe>? _favoriteRecipesCache;
+  List<Recipe>? _favoriteRecipesSource;
+  String? _filteredRecipesQuery;
+  String? _filteredRecipesCountry;
+
+  void _invalidateSmartSuggestions() => _smartSuggestionsCache = null;
+
+  void _invalidateRecipeCaches() {
+    _invalidateSmartSuggestions();
+    _filteredRecipesCache = null;
+    _filteredRecipesSource = null;
+    _favoriteRecipesCache = null;
+    _favoriteRecipesSource = null;
+  }
+
   List<SmartSuggestion> get smartSuggestions =>
       _smartSuggestionsCache ??= SmartRecipeEngine.rank(
         pantry,
@@ -557,10 +575,15 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   List<Recipe> get suggestions =>
       smartSuggestions.map((x) => x.recipe).toList();
 
-  List<Recipe>? _filteredRecipesCache;
-  List<Recipe>? _filteredRecipesSource;
-  String? _filteredRecipesQuery;
-  String? _filteredRecipesCountry;
+  List<Recipe> get favoriteRecipes {
+    if (_favoriteRecipesCache != null && identical(_favoriteRecipesSource, recipes)) {
+      return _favoriteRecipesCache!;
+    }
+    final result = recipes.where((recipe) => recipe.favorite).toList();
+    _favoriteRecipesSource = recipes;
+    _favoriteRecipesCache = result;
+    return result;
+  }
   List<Recipe> get filteredRecipes {
     if (_filteredRecipesCache != null &&
         identical(_filteredRecipesSource, recipes) &&
@@ -613,7 +636,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   Widget recipesPage() {
     final list = filteredRecipes;
     return Column(children: [
-      Padding(padding: const EdgeInsets.fromLTRB(18, 10, 18, 0), child: section('وصفاتي', '\${list.length} ظاهر من \${recipes.length} وصفة')),
+      Padding(padding: const EdgeInsets.fromLTRB(18, 10, 18, 0), child: section('وصفاتي', '${list.length} ظاهر من ${recipes.length} وصفة')),
       Padding(padding: const EdgeInsets.fromLTRB(18, 12, 18, 8), child: TextField(
         controller: recipeSearchController, onChanged: (value) => setState(() => recipeQuery = value), textDirection: TextDirection.rtl,
         decoration: InputDecoration(hintText: 'ابحثي باسم الوصفة أو المكوّن…', prefixIcon: const Icon(Icons.search_rounded),
@@ -656,11 +679,15 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     history: recipeUseCount,
     recentRecipeIds: recentRecipeIds,
     onPantryChanged: (items) {
-      setState(() => pantry = List<String>.from(items));
+      setState(() {
+        pantry = List<String>.from(items);
+        _invalidateSmartSuggestions();
+      });
       save();
     },
     onCooked: (recipe) {
       setState(() {
+        _invalidateSmartSuggestions();
         recipeUseCount[recipe.id] = (recipeUseCount[recipe.id] ?? 0) + 1;
         recentRecipeIds = [recipe.id, ...recentRecipeIds.where((id) => id != recipe.id)].take(12).toList();
       });
@@ -669,8 +696,17 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
   );
 
   Widget favoritesPage() {
-    final list = recipes.where((r)=>r.favorite).toList();
-    return ListView(padding:const EdgeInsets.all(18),children:[section('المفضلة','الوصفات اللي بتحبي ترجعي لها'),const SizedBox(height:12),...list.map(recipeCard),if(list.isEmpty) empty('اضغطي على القلب جنب أي وصفة عشان تلاقيها هنا بسرعة.')]);
+    final list = favoriteRecipes;
+    return ListView.builder(
+      padding: const EdgeInsets.all(18),
+      itemCount: list.isEmpty ? 3 : list.length + 2,
+      itemBuilder: (_, index) {
+        if (index == 0) return section('المفضلة', 'الوصفات اللي بتحبي ترجعي لها');
+        if (index == 1) return const SizedBox(height: 12);
+        if (list.isEmpty) return empty('اضغطي على القلب جنب أي وصفة عشان تلاقيها هنا بسرعة.');
+        return recipeCard(list[index - 2]);
+      },
+    );
   }
 
   Widget section(String title,String sub) => Row(children:[
@@ -761,6 +797,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   void markCooked(Recipe r) {
     setState(() {
+      _invalidateSmartSuggestions();
       recipeUseCount[r.id] = (recipeUseCount[r.id] ?? 0) + 1;
       recentRecipeIds = [r.id, ...recentRecipeIds.where((id) => id != r.id)].take(12).toList();
     });
@@ -772,7 +809,10 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
 
   Future<void> diagnoseAndRepairRecipes() async {
     final result = repairRecipeLibrary(recipes);
-    setState(() => recipes = result.recipes);
+    setState(() {
+      recipes = result.recipes;
+      _invalidateRecipeCaches();
+    });
     await save();
     if (!mounted) return;
     showDialog<void>(
@@ -805,7 +845,13 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
     );
   }
 
-  void toggleFavorite(Recipe r) { setState(()=>recipes=recipes.map((x)=>x.id==r.id?x.copyWith(favorite:!x.favorite):x).toList()); save(); }
+  void toggleFavorite(Recipe r) {
+    setState(() {
+      recipes = recipes.map((x) => x.id == r.id ? x.copyWith(favorite: !x.favorite) : x).toList();
+      _invalidateRecipeCaches();
+    });
+    save();
+  }
 
   void details(Recipe r) => showModalBottomSheet(context:navigatorKey.currentState!.context,isScrollControlled:true,backgroundColor:cream,builder:(_)=>Directionality(textDirection:TextDirection.rtl,child:DraggableScrollableSheet(expand:false,initialChildSize:.72,builder:(_,c)=>ListView(controller:c,padding:const EdgeInsets.all(22),children:[
     recipeHeroImage(r),const SizedBox(height:12),Text(r.title,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900,color:brown)),const SizedBox(height:7),
@@ -837,7 +883,7 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('إلغاء')),FilledButton(onPressed:(){
         if(title.text.trim().isEmpty)return;
         final r=Recipe(id:DateTime.now().microsecondsSinceEpoch.toString(),title:title.text.trim(),category:'بيتي',time:time.text.trim().isEmpty?'غير محدد':time.text.trim(),description:'وصفة من مطبخك.',country:'وصفة شخصية',ingredients:parseIngredients(ingredients.text),steps:parseSteps(steps.text),imageUrl:imageUrl.text.trim());
-        setState(()=>recipes.insert(0,r));save();Navigator.pop(dialogContext);
+        setState(() { recipes = [r, ...recipes]; _invalidateRecipeCaches(); });save();Navigator.pop(dialogContext);
       },child:const Text('حفظ'))]
     )));
   }
@@ -851,10 +897,10 @@ class _CozyMamaAppState extends State<CozyMamaApp> {
       child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
         const Text('مكونات البيت',style:TextStyle(fontSize:23,fontWeight:FontWeight.w900,color:brown)),
         const SizedBox(height:6),const Text('اكتبي الموجود عندك عشان الاقتراحات تبقى أذكى.',style:TextStyle(color:brown)),const SizedBox(height:14),
-        Wrap(spacing:7,runSpacing:7,children:pantry.map((x)=>InputChip(label:Text(x),onDeleted:(){setState(()=>pantry.remove(x));sheet((){});save();})).toList()),
+        Wrap(spacing:7,runSpacing:7,children:pantry.map((x)=>InputChip(label:Text(x),onDeleted:(){setState(() { pantry = List<String>.from(pantry)..remove(x); _invalidateSmartSuggestions(); });sheet((){});save();})).toList()),
         const SizedBox(height:10),Row(children:[
           Expanded(child:TextField(controller:c,decoration:InputDecoration(hintText:'مثال: جزر',filled:true,fillColor:Colors.white70,border:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:BorderSide.none)))),
-          const SizedBox(width:8),IconButton.filled(onPressed:(){final x=c.text.trim();if(x.isNotEmpty&&!pantry.any((item)=>SmartRecipeEngine.normalize(item)==SmartRecipeEngine.normalize(x))){setState(()=>pantry.add(x));sheet((){});c.clear();save();}},icon:const Icon(Icons.add_rounded))
+          const SizedBox(width:8),IconButton.filled(onPressed:(){final x=c.text.trim();if(x.isNotEmpty&&!pantry.any((item)=>SmartRecipeEngine.normalize(item)==SmartRecipeEngine.normalize(x))){setState(() { pantry = [...pantry, x]; _invalidateSmartSuggestions(); });sheet((){});c.clear();save();}},icon:const Icon(Icons.add_rounded))
         ])
       ])
     ))));
@@ -904,12 +950,23 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
   List<Recipe>? _filterOptionsSource;
   List<String> _countryOptionsCache = const <String>[];
   List<String> _categoryOptionsCache = const <String>[];
+  String? _discoveryCacheKey;
+  List<Recipe>? _discoveryCache;
 
   @override
   void initState() {
     super.initState();
     pantry = List<String>.from(widget.pantry);
     _loadSmartData();
+  }
+
+  @override
+  void didUpdateWidget(covariant SmartKitchenPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.pantry, widget.pantry)) {
+      pantry = List<String>.from(widget.pantry);
+      _rankedCacheKey = null;
+    }
   }
 
   @override
@@ -1179,7 +1236,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
               label: Text(
                 selectedDate == null
                     ? 'تاريخ الانتهاء اختياري'
-                    : 'الانتهاء \${selectedDate!.day}/\${selectedDate!.month}',
+                    : 'الانتهاء ${selectedDate!.day}/${selectedDate!.month}',
               ),
             ),
           ]),
@@ -1278,7 +1335,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
                 style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: brown),
               ),
               const SizedBox(height: 5),
-              Text('\${recipe.country} • \${recipe.category} • \${recipe.time} • \${_difficulty(recipe)}'),
+              Text('${recipe.country} • ${recipe.category} • ${recipe.time} • ${_difficulty(recipe)}'),
               const SizedBox(height: 12),
               Text(recipe.description, style: const TextStyle(height: 1.5)),
               const SizedBox(height: 12),
@@ -1391,7 +1448,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               const Text('وضع الطبخ', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
               const SizedBox(height: 7),
-              Text('الخطوة \${step + 1} من \${recipe.steps.length}'),
+              Text('الخطوة ${step + 1} من ${recipe.steps.length}'),
               const SizedBox(height: 12),
               Text(
                 recipe.steps[step],
@@ -1424,7 +1481,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
                           }
                         });
                       },
-                      child: Text('\${minutes} د'),
+                      child: Text('${minutes} د'),
                     ),
                   FilledButton(
                     onPressed: () {
@@ -1486,7 +1543,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
     leading: Icon(recipe == null ? Icons.remove_circle_outline_rounded : Icons.restaurant_rounded),
     title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
     subtitle: Text(recipe?.title ?? 'لا يوجد تطابق'),
-    trailing: recipe == null ? null : Text('\${_minutes(recipe)} د'),
+    trailing: recipe == null ? null : Text('${_minutes(recipe)} د'),
   );
 
   Widget _suggestionCard(SmartSuggestion item) {
@@ -1507,7 +1564,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
                 ),
               ),
-              Text('\${item.score}%', style: const TextStyle(fontWeight: FontWeight.w900)),
+              Text('${item.score}%', style: const TextStyle(fontWeight: FontWeight.w900)),
             ]),
             const SizedBox(height: 7),
             Text(item.reason),
@@ -1554,7 +1611,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
             ),
             IconButton(onPressed: _addPantry, icon: const Icon(Icons.add_circle_rounded)),
           ]),
-          Text('\${pantry.length} مكوّن محفوظ Offline'),
+          Text('${pantry.length} مكوّن محفوظ Offline'),
           if (expiring.isNotEmpty)
             Text('قريب من الانتهاء: ${expiring.join('، ')}', style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
@@ -1651,6 +1708,20 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
     ]);
   }
 
+  List<Recipe> _discoverNew() {
+    final cacheKey = jsonEncode([identityHashCode(widget.recipes), widget.recentRecipeIds]);
+    if (_discoveryCache != null && _discoveryCacheKey == cacheKey) {
+      return _discoveryCache!;
+    }
+    final result = widget.recipes
+        .where((recipe) => !widget.recentRecipeIds.contains(recipe.id) && !recipe.favorite)
+        .take(4)
+        .toList();
+    _discoveryCacheKey = cacheKey;
+    _discoveryCache = result;
+    return result;
+  }
+
   Widget _dashboard() {
     final ranked = _ranked();
     final interpreted = _understandIngredients(query);
@@ -1661,7 +1732,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
       children: [
         const Text('المطبخ الذكي', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
         const SizedBox(height: 5),
-        Text('اكتبي المكونات أو جملة كاملة. الموسم الحالي: \${_season()}'),
+        Text('اكتبي المكونات أو جملة كاملة. الموسم الحالي: ${_season()}'),
         const SizedBox(height: 12),
         TextField(
           controller: queryController,
@@ -1745,7 +1816,7 @@ class _SmartKitchenPageState extends State<SmartKitchenPage> {
         ))),
         const SizedBox(height: 8),
         const Text('اكتشفي الجديد', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-        ...widget.recipes.where((r) => !widget.recentRecipeIds.contains(r.id) && !r.favorite).take(4).map(
+        ..._discoverNew().map(
           (recipe) => _suggestionCard(SmartSuggestion(
             recipe: recipe,
             matched: const [],
