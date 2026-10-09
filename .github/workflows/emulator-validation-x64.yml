@@ -1,0 +1,85 @@
+name: Android Emulator Validation (x86_64)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'integration_test/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/emulator-validation-x64.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-emulator-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-emulator:
+    name: Flutter integration test on Android API 35
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android platform files
+        run: flutter create --platforms=android --project-name cozy_mama_recipes .
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      - name: Run widget and unit tests
+        run: flutter test
+
+      - name: Enable KVM for Android Emulator
+        run: |
+          if [ ! -e /dev/kvm ]; then
+            echo 'KVM device is not available on this GitHub runner.' >&2
+            exit 1
+          fi
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Run on Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-metrics
+          script: flutter test integration_test/app_test.dart -d emulator-5554
+
+      - name: Collect emulator diagnostics on failure
+        if: failure()
+        run: |
+          mkdir -p build/emulator-diagnostics
+          adb devices -l > build/emulator-diagnostics/adb-devices.txt 2>&1 || true
+          adb logcat -d -t 5000 > build/emulator-diagnostics/logcat.txt 2>&1 || true
+          adb shell screencap -p /sdcard/emulator-failure.png >/dev/null 2>&1 && adb pull /sdcard/emulator-failure.png build/emulator-diagnostics/screenshot.png >/dev/null 2>&1 || true
+
+      - name: Upload emulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: android-emulator-diagnostics
+          path: build/emulator-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
