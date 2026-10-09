@@ -35,6 +35,13 @@ jobs:
 
       - name: Generate Android platform files
         run: flutter create --platforms=android --project-name cozy_mama_recipes .
+      - name: Disable redundant Gradle file watching in CI
+        run: echo 'org.gradle.vfs.watch=false' >> android/gradle.properties
+
+      - name: Prepare Android emulator update metadata
+        run: |
+          mkdir -p "$HOME/.android"
+          touch "$HOME/.android/emu-update-last-check.ini"
 
       - name: Resolve dependencies
         run: flutter pub get
@@ -65,7 +72,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-metrics
-          script: flutter test integration_test/app_test.dart -d emulator-5554
+          script: flutter test --no-pub integration_test/app_test.dart -d emulator-5554
 
       - name: Collect emulator diagnostics on failure
         if: failure()
@@ -76,7 +83,7 @@ jobs:
           adb shell screencap -p /sdcard/emulator-failure.png >/dev/null 2>&1 && adb pull /sdcard/emulator-failure.png build/emulator-diagnostics/screenshot.png >/dev/null 2>&1 || true
 
       - name: Upload emulator diagnostics
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v6
         with:
           name: android-emulator-diagnostics

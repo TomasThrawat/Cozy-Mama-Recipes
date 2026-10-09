@@ -26,6 +26,8 @@ jobs:
           cache: true
       - name: Create Android files
         run: flutter create --platforms=android --project-name cozy_mama_recipes .
+      - name: Disable redundant Gradle file watching in CI
+        run: echo 'org.gradle.vfs.watch=false' >> android/gradle.properties
       - name: Apply cozy launcher icon
         run: |
           mkdir -p android/app/src/main/res/drawable
@@ -50,7 +52,7 @@ jobs:
       - name: Test
         run: flutter test
       - name: Build arm64 APK
-        run: flutter build apk --release --target-platform android-arm64
+        run: flutter build apk --release --target-platform android-arm64 --no-pub
       - name: Verify APK contains arm64-v8a only
         shell: bash
         run: |
