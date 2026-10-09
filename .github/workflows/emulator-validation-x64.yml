@@ -1,6 +1,9 @@
 name: Temporary Emulator Validation (x86_64)
 
 on:
+  push:
+    branches:
+      - emulator-test-x64-20261009
   workflow_dispatch:
 
 permissions:
