@@ -165,6 +165,30 @@ class SmartRecipeEngine {
         if (normalized.length >= 2 && !result.contains(normalized)) result.add(normalized);
       }
     }
+
+    final sourceText = _fold(value);
+    int firstSourceIndex(String canonical) {
+      var earliest = sourceText.length;
+      for (final alias in _aliases.keys) {
+        if (normalize(alias) != canonical) continue;
+        final needle = _fold(alias);
+        var start = 0;
+        while (start <= sourceText.length - needle.length) {
+          final found = sourceText.indexOf(needle, start);
+          if (found < 0) break;
+          final end = found + needle.length;
+          if (!_isWordCodeUnit(sourceText, found - 1) &&
+              !_isWordCodeUnit(sourceText, end)) {
+            if (found < earliest) earliest = found;
+            break;
+          }
+          start = found + 1;
+        }
+      }
+      return earliest;
+    }
+
+    result.sort((a, b) => firstSourceIndex(a).compareTo(firstSourceIndex(b)));
     return result;
   }
 

@@ -99,6 +99,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(expandedRecipe.title).last);
     await tester.pumpAndSettle();
+    expect(find.text('المكونات'), findsOneWidget);
     expect(find.textContaining('المكونات والخطوات مبدئية'), findsOneWidget);
   });
 
